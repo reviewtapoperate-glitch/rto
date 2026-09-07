@@ -1,0 +1,15 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    - cron: "0 6 * * 1,4"   # runs every Monday and Thursday at 06:00 UTC
+  workflow_dispatch:          # lets you also trigger it manually from GitHub
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase to prevent auto-pause
+        run: |
+          curl -s "https://ptmznpjsgdkasvywufcx.supabase.co/rest/v1/customers?select=slug&limit=1" \
+          -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg"
