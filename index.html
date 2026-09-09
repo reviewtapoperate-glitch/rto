@@ -150,7 +150,15 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ADMIN_PASSCODE = "RTO2026"; // change this before real use
 
 const configured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
-const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+let libsLoaded = true;
+let sb = null;
+if (configured) {
+  if (typeof supabase === "undefined" || !supabase.createClient) {
+    libsLoaded = false;
+  } else {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}
 const BUCKET = "rto-photos";
 
 const app = document.getElementById("app");
@@ -310,14 +318,213 @@ function closeLightbox(){ const m = document.getElementById("lightboxModal"); if
 /* ============================================================
    ROUTING
    ============================================================ */
-if (!configured) {
-  renderSetupNeeded();
-} else if (slug) {
-  renderPublicProfile(slug);
-} else if (editSlug) {
-  renderOwnerGate(editSlug);
-} else {
-  renderAdminGate();
+try {
+  if (!libsLoaded) {
+    renderLibraryLoadError();
+  } else if (!configured) {
+    renderSetupNeeded();
+  } else if (slug) {
+    renderPublicProfile(slug);
+  } else if (editSlug) {
+    renderOwnerGate(editSlug);
+  } else if (sessionStorage.getItem("rto_admin") === "1") {
+    renderDashboard();
+  } else {
+    renderLanding("home");
+  }
+} catch (err) {
+  app.innerHTML = `
+    <div class="center-screen"><div class="wrap" style="max-width:420px;text-align:center;">
+      <div class="brand" style="justify-content:center;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+      <div class="setup-warning" style="text-align:left;">
+        <b>Something went wrong loading the page.</b><br><br>
+        ${esc(err.message || String(err))}
+        <br><br>Try a hard refresh (or a private/incognito tab). If it keeps happening, copy this exact message and send it over.
+      </div>
+    </div></div>`;
+}
+
+function renderLibraryLoadError(){
+  app.innerHTML = `
+    <div class="center-screen"><div class="wrap" style="max-width:420px;text-align:center;">
+      <div class="brand" style="justify-content:center;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+      <div class="setup-warning" style="text-align:left;">
+        <b>Couldn't load a required script.</b><br><br>
+        This usually means your internet connection dropped mid-load, or an ad blocker / browser extension is blocking cdn.jsdelivr.net.
+        Try refreshing, switching WiFi/data, or opening this link in a different browser.
+      </div>
+    </div></div>`;
+}
+
+/* ============================================================
+   LANDING PAGE — the public homepage. Marketing + signup + login.
+   Admin is reached only by triple-clicking the logo here, or by
+   already having an active admin session.
+   ============================================================ */
+let logoClickCount = 0;
+let logoClickTimer = null;
+function handleLogoClick(){
+  logoClickCount++;
+  if (logoClickTimer) clearTimeout(logoClickTimer);
+  logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 1200);
+  if (logoClickCount >= 3) {
+    logoClickCount = 0;
+    clearTimeout(logoClickTimer);
+    renderAdminGate();
+  }
+}
+
+function renderLanding(view){
+  if (view === "signup") return renderSignupForm();
+  if (view === "login") return renderLoginForm();
+
+  app.innerHTML = `
+    <div class="wrap" style="max-width:460px;">
+      <div class="brand" style="margin-top:36px;cursor:pointer;user-select:none;" onclick="handleLogoClick()">
+        <div class="mark">RTO</div><span>ReviewTapOperate</span>
+      </div>
+
+      <div style="text-align:center;margin:26px 0 30px;">
+        <p class="p-name" style="font-size:34px;">Tap. They save you.</p>
+        <p class="hint" style="font-size:14px;color:var(--text-dim);margin-top:8px;">
+          One NFC card and QR code that puts your contact, socials, reviews, menu, and payment info in front of anyone in one tap — no app needed, editable anytime.
+        </p>
+      </div>
+
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn" onclick="renderLanding('signup')">Get started</button>
+        <button class="btn secondary" onclick="renderLanding('login')">Business login</button>
+      </div>
+
+      <div class="card" style="margin-top:28px;">
+        <p style="font-weight:700;margin:0 0 12px;">What you get</p>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;color:var(--text-dim);">
+          <div>&#10003; One tap saves your contact straight to their phone</div>
+          <div>&#10003; Direct WhatsApp, Google review, and social links</div>
+          <div>&#10003; Menu or price list, gallery, and till number on the same page</div>
+          <div>&#10003; Edit anything yourself, anytime — no reprinting</div>
+          <div>&#10003; Works with or without NFC, via QR code too</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <p style="font-weight:700;margin:0 0 12px;">Simple pricing</p>
+        <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:8px;">
+          <span>Starter — one-time setup</span><span style="font-weight:700;color:var(--pink);">KES 5,000</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13.5px;">
+          <span>Business — setup + hosting</span><span style="font-weight:700;color:var(--cyan);">KES 5,000 + 500/mo</span>
+        </div>
+      </div>
+
+      <p class="footer-tag" style="margin-top:26px;">ReviewTapOperate</p>
+    </div>`;
+}
+
+function renderSignupForm(){
+  app.innerHTML = `
+    <div class="wrap" style="max-width:400px;">
+      <div class="brand" style="margin-top:36px;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+      <div class="card" style="margin-top:20px;">
+        <p style="font-weight:700;margin:0 0 4px;">Create your account</p>
+        <p class="hint" style="margin-bottom:16px;">Takes under a minute. We'll generate your access code automatically — you'll land straight in your own page editor after this.</p>
+
+        <div class="field"><label>Business / your name</label><input id="su_name" placeholder="e.g. Bright Salon"></div>
+        <div class="field">
+          <label>Business type</label>
+          <select id="su_biztype">${bizTypeOptions("")}</select>
+        </div>
+        <div class="field"><label>Phone number</label><input id="su_phone" placeholder="+2547XXXXXXXX"></div>
+
+        <button class="btn" id="suBtn" onclick="doSignup()">Create my account</button>
+        <button class="btn secondary" style="margin-top:8px;" onclick="renderLanding('home')">Back</button>
+      </div>
+    </div>`;
+}
+async function resolveUniqueSlug(base){
+  let candidate = base || "business";
+  let suffix = 1;
+  for (let i = 0; i < 20; i++) {
+    const { data } = await sb.from("customers").select("slug").eq("slug", candidate).maybeSingle();
+    if (!data) return candidate;
+    suffix++;
+    candidate = base + "-" + suffix;
+  }
+  return base + "-" + Date.now();
+}
+async function doSignup(){
+  const name = document.getElementById("su_name").value.trim();
+  const bizType = document.getElementById("su_biztype").value;
+  const phone = document.getElementById("su_phone").value.trim();
+
+  if (!name || !bizType || !phone) { toast("Please fill in every field"); return; }
+
+  const btn = document.getElementById("suBtn");
+  btn.textContent = "Creating…"; btn.disabled = true;
+
+  const baseSlug = slugify(name);
+  const finalSlug = await resolveUniqueSlug(baseSlug);
+  const code = generateOwnerCode();
+
+  const record = {
+    slug: finalSlug, name, business_type: bizType, phone, owner_code: code,
+    portfolio: [], menu_items: [], social_links: [], portfolio_title: "Recent work", theme: "neon",
+  };
+  const { error } = await sb.from("customers").insert(record);
+  btn.textContent = "Create my account"; btn.disabled = false;
+
+  if (error) { toast("Couldn't create your account: " + error.message); return; }
+  renderSignupSuccess(record);
+}
+function renderSignupSuccess(record){
+  window.__pendingSignupRecord = record;
+  app.innerHTML = `
+    <div class="wrap" style="max-width:400px;">
+      <div class="brand" style="margin-top:36px;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+      <div class="card" style="margin-top:20px;">
+        <p style="font-weight:700;margin:0 0 4px;">You're in, ${esc(record.name)}</p>
+        <p class="hint" style="margin-bottom:16px;">Save this access code somewhere safe — it's the only thing you need to log back in later. Anyone with this code can edit your page, so don't share it publicly.</p>
+
+        <label style="text-align:left;display:block;">Your access code</label>
+        <input readonly value="${esc(record.owner_code)}" style="font-family:monospace;font-weight:700;letter-spacing:2px;text-align:center;font-size:20px;" onclick="this.select()">
+        <button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText('${record.owner_code}');toast('Code copied')">Copy code</button>
+
+        <button class="btn" style="margin-top:20px;" onclick="continueToOwnerEditor()">Continue to my page</button>
+      </div>
+    </div>`;
+}
+function continueToOwnerEditor(){
+  currentMode = "owner";
+  renderOwnerEditor(window.__pendingSignupRecord);
+}
+
+function renderLoginForm(){
+  app.innerHTML = `
+    <div class="wrap" style="max-width:380px;">
+      <div class="brand" style="margin-top:36px;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+      <div class="card" style="margin-top:20px;">
+        <p style="font-weight:700;margin:0 0 4px;">Business login</p>
+        <p class="hint" style="margin-bottom:16px;">Enter your access code — that's all you need.</p>
+        <div class="field"><label>Access code</label><input id="li_code" style="text-align:center;letter-spacing:2px;font-family:monospace;text-transform:uppercase;" placeholder="e.g. K7P2QX"></div>
+        <button class="btn" id="liBtn" onclick="doLogin()">Log in</button>
+        <button class="btn secondary" style="margin-top:8px;" onclick="renderLanding('home')">Back</button>
+      </div>
+    </div>`;
+  document.getElementById("li_code").addEventListener("keydown", e => { if(e.key==="Enter") doLogin(); });
+}
+async function doLogin(){
+  const code = document.getElementById("li_code").value.trim().toUpperCase();
+  if (!code) { toast("Enter your access code"); return; }
+
+  const btn = document.getElementById("liBtn");
+  btn.textContent = "Checking…"; btn.disabled = true;
+  const { data, error } = await sb.from("customers").select("*").eq("owner_code", code).maybeSingle();
+  btn.textContent = "Log in"; btn.disabled = false;
+
+  if (error || !data) { toast("That access code doesn't match any account"); return; }
+
+  currentMode = "owner";
+  renderOwnerEditor(data);
 }
 
 function renderSetupNeeded(){
@@ -333,9 +540,8 @@ function renderSetupNeeded(){
 }
 
 /* ============================================================
-   ADMIN — passcode gate. This is your master access:
-   https://yourusername.github.io/index.html — no ?c= or ?edit=
-   in the URL at all. Just the plain link, then your passcode.
+   ADMIN — passcode gate. Reached only via triple-click on the
+   landing page logo, or an already-active admin session.
    ============================================================ */
 function renderAdminGate(){
   if (sessionStorage.getItem("rto_admin") === "1") return renderDashboard();
@@ -348,9 +554,7 @@ function renderAdminGate(){
           <input type="password" id="pass" placeholder="Enter passcode">
           <button class="btn" style="margin-top:14px;" onclick="checkPass()">Unlock</button>
         </div>
-        <p class="hint" style="text-align:center;margin-top:14px;">
-          Customers never see this screen. Anyone scanning a QR or tapping a card goes straight to their own page — no login, ever.
-        </p>
+        <button class="btn secondary" style="margin-top:14px;" onclick="renderLanding('home')">Back to site</button>
       </div>
     </div>`;
   document.getElementById("pass").addEventListener("keydown", e => { if(e.key==="Enter") checkPass(); });
@@ -361,6 +565,7 @@ function checkPass(){
   else toast("Wrong passcode");
 }
 
+
 /* ============================================================
    ADMIN — dashboard
    ============================================================ */
@@ -370,6 +575,7 @@ async function renderDashboard(){
     <div class="wrap">
       <div class="top-bar">
         <div class="brand" style="margin:0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+        <button class="icon-btn" title="Log out" onclick="sessionStorage.removeItem('rto_admin'); renderLanding('home')">&#8630;</button>
       </div>
       <p class="muted" style="margin:0 0 18px;">Every customer's tap card, one dashboard. Works for any type of business.</p>
       <div class="btn-row" style="margin-top:0;">
@@ -926,7 +1132,10 @@ function renderOwnerEditor(c){
 
   app.innerHTML = `
     <div class="wrap">
-      <div class="brand" style="margin-top:20px;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+      <div class="top-bar">
+        <div class="brand" style="margin:20px 0 0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+        <button class="icon-btn" title="Log out" onclick="renderLanding('home')">&#8630;</button>
+      </div>
       <div class="card" style="margin:16px 0;">
         <p style="font-weight:700;margin:0 0 4px;">Your page</p>
         <p class="hint" style="margin-bottom:16px;">
@@ -971,15 +1180,11 @@ async function renderPublicProfile(s){
         ${c.phone ? `<a class="btn-save-public" download="${esc(c.name)}.vcf" href="${vcard(c)}" onclick="logEvent('${s}','click','Save Contact')">Save this contact</a>` : ""}
       </div>
 
-      ${(c.whatsapp_number || c.google_review_url) ? `
+      ${(c.whatsapp_number || c.google_review_url || socialList.length) ? `
         <p class="p-section-h">Connect</p>
         ${c.whatsapp_number ? tube(`https://wa.me/${digits(c.whatsapp_number)}?text=${encodeURIComponent(c.whatsapp_message||"Hi!")}`,"cyan","Chat on WhatsApp","Send a message directly", s) : ""}
         ${c.google_review_url ? tube(c.google_review_url,"pink","Leave a Google review","Takes 30 seconds", s) : ""}
-      ` : ""}
-
-      ${socialList.length ? `
-        <p class="p-section-h">Quick links</p>
-        <div class="icon-grid">${socialList.map((soc,i) => iconBadge(soc,i,s)).join("")}</div>
+        ${socialList.map((soc,i) => socialTube(soc, i%2===0 ? "cyan" : "pink", s)).join("")}
       ` : ""}
 
       ${c.till_number ? `
@@ -1002,6 +1207,12 @@ async function renderPublicProfile(s){
 
       <p class="footer-tag">Powered by ReviewTapOperate</p>
     </div>`;
+}
+function socialTube(soc, colorClass, slugValue){
+  const meta = socialMeta(soc.platform);
+  const url = socialUrl(soc.platform, soc.value);
+  const sub = meta.mode === "handle" ? "@" + soc.value.replace("@","") : meta.label;
+  return tube(url, colorClass, meta.label, sub, slugValue);
 }
 function iconBadge(soc, i, slugValue){
   const meta = socialMeta(soc.platform);
