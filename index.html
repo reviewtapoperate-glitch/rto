@@ -199,6 +199,353 @@ function esc(s){ return (s||"").toString().replace(/[&<>"']/g, m => ({"&":"&amp;
 function digits(v){ return (v||"").replace(/[^\d+]/g,""); }
 function initials(name){ return (name||"?").split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
 function tapLink(s){ return window.location.origin + window.location.pathname + "?c=" + s; }
+
+/* ============================================================
+   MEMBER ACCOUNTS — real end-customer accounts (the people tapping
+   cards), separate from business owners and admin. Same lightweight
+   access-code pattern as businesses: no password, no email needed.
+   ============================================================ */
+function getMemberSession(){
+  try { return JSON.parse(sessionStorage.getItem("rto_member") || "null"); } catch(e) { return null; }
+}
+function setMemberSession(m){ sessionStorage.setItem("rto_member", JSON.stringify(m)); }
+function clearMemberSession(){ sessionStorage.removeItem("rto_member"); }
+
+function showMemberAuthModal(onSuccess){
+  const old = document.getElementById("memberAuthModal");
+  if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", `
+    <div class="modal-bg" id="memberAuthModal" onclick="if(event.target.id==='memberAuthModal') closeMemberAuthModal()">
+      <div class="modal">
+        <div id="memberAuthBody"></div>
+      </div>
+    </div>`);
+  renderMemberAuthTab("signup");
+  window.__memberAuthSuccessCb = onSuccess;
+}
+function renderMemberAuthTab(tab){
+  const body = document.getElementById("memberAuthBody");
+  if (!body) return;
+  if (tab === "login") {
+    body.innerHTML = `
+      <p style="font-weight:700;margin:0 0 4px;">Log in</p>
+      <p class="hint" style="margin-bottom:14px;">Enter your phone number and access code.</p>
+      <div class="field" style="text-align:left;"><label>Phone number</label><input id="ma_phone"></div>
+      <div class="field" style="text-align:left;"><label>Access code</label><input id="ma_code" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace;"></div>
+      <button class="btn" onclick="doMemberLogin()">Log in</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('signup')">New here? Sign up instead</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="closeMemberAuthModal()">Cancel</button>`;
+  } else {
+    body.innerHTML = `
+      <p style="font-weight:700;margin:0 0 4px;">Quick sign up</p>
+      <p class="hint" style="margin-bottom:14px;">Just your name and phone — takes seconds. We'll give you an access code to log back in anytime.</p>
+      <div class="field" style="text-align:left;"><label>Your name</label><input id="ma_name"></div>
+      <div class="field" style="text-align:left;"><label>Phone number</label><input id="ma_phone2"></div>
+      <button class="btn" onclick="doMemberSignup()">Sign up</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Already have an account? Log in</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="closeMemberAuthModal()">Cancel</button>`;
+  }
+}
+async function doMemberSignup(){
+  const name = document.getElementById("ma_name").value.trim();
+  const phone = document.getElementById("ma_phone2").value.trim();
+  if (!name || !phone) { toast("Enter your name and phone"); return; }
+  const code = generateOwnerCode();
+  const { data, error } = await sb.from("members").insert({ name, phone, access_code: code }).select().maybeSingle();
+  if (error) {
+    if (error.message && error.message.toLowerCase().includes("duplicate")) {
+      toast("That phone is already registered — try logging in instead");
+    } else {
+      toast("Couldn't sign up: " + error.message);
+    }
+    return;
+  }
+  toast(`Account created! Your access code is ${code} — save it.`);
+  setMemberSession({ id: data.id, name: data.name, phone: data.phone });
+  closeMemberAuthModal();
+  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+}
+async function doMemberLogin(){
+  const phone = document.getElementById("ma_phone").value.trim();
+  const code = document.getElementById("ma_code").value.trim().toUpperCase();
+  if (!phone || !code) { toast("Enter your phone and access code"); return; }
+  const { data, error } = await sb.from("members").select("*").eq("phone", phone).maybeSingle();
+  if (error || !data || data.access_code.toUpperCase() !== code) { toast("No match found — check your phone and code"); return; }
+  setMemberSession({ id: data.id, name: data.name, phone: data.phone });
+  toast(`Welcome back, ${data.name}`);
+  closeMemberAuthModal();
+  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+}
+function closeMemberAuthModal(){ const m = document.getElementById("memberAuthModal"); if (m) m.remove(); }
+
+/* ============================================================
+   IN-APP REVIEWS — logged-in members only, one review per member
+   per business (editable). Shown here and pulled into Compare.
+   ============================================================ */
+async function loadReviewsSection(slugValue){
+  const holder = document.getElementById("reviewsSection");
+  if (!holder) return;
+  const { data, error } = await sb.from("reviews").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
+  if (!document.getElementById("reviewsSection")) return; // navigated away already
+  if (error) { holder.innerHTML = `<p class="hint">Couldn't load reviews.</p>`; return; }
+  const reviews = data || [];
+  const avg = reviews.length ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0;
+  const member = getMemberSession();
+  const myReview = member ? reviews.find(r => r.member_id === member.id) : null;
+
+  let html = "";
+  if (reviews.length) {
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <span style="font-size:22px;font-weight:800;color:var(--pink);">${avg.toFixed(1)}</span>
+      <span style="color:var(--pink);">${"&#9733;".repeat(Math.round(avg))}${"&#9734;".repeat(5 - Math.round(avg))}</span>
+      <span class="hint" style="margin:0;">(${reviews.length} review${reviews.length === 1 ? "" : "s"})</span>
+    </div>`;
+    html += reviews.slice(0, 5).map(r => `
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;"><b style="font-size:13px;">${esc(r.member_name || "Anonymous")}</b><span style="color:var(--pink);font-size:12px;">${"&#9733;".repeat(r.rating)}</span></div>
+        ${r.comment ? `<p style="font-size:13px;margin:6px 0 0;color:var(--text-dim);">${esc(r.comment)}</p>` : ""}
+      </div>`).join("");
+  } else {
+    html += `<p class="hint" style="margin-bottom:14px;">No reviews yet — be the first.</p>`;
+  }
+  html += `<div id="reviewFormWrap"></div>`;
+  holder.innerHTML = html;
+  renderReviewForm(slugValue, myReview);
+}
+function renderReviewForm(slugValue, existing){
+  const wrap = document.getElementById("reviewFormWrap");
+  if (!wrap) return;
+  const member = getMemberSession();
+  if (!member) {
+    wrap.innerHTML = `<button class="btn secondary" onclick="showMemberAuthModal(() => loadReviewsSection('${slugValue}'))">Sign in to leave a review</button>`;
+    return;
+  }
+  window.__currentRating = existing ? existing.rating : 0;
+  wrap.innerHTML = `
+    <div style="background:var(--panel-2);border-radius:11px;padding:12px 14px;">
+      <p style="font-size:12.5px;color:var(--text-dim);margin:0 0 8px;">${existing ? "Update your review" : "Leave a review, " + esc(member.name)}</p>
+      <div id="starPicker" style="font-size:22px;color:var(--pink);cursor:pointer;margin-bottom:8px;"></div>
+      <textarea id="reviewComment" placeholder="Optional comment" rows="2" style="width:100%;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--text);font-family:inherit;font-size:13px;">${esc(existing ? (existing.comment || "") : "")}</textarea>
+      <button class="btn" style="margin-top:8px;" onclick="submitReview('${slugValue}')">${existing ? "Update review" : "Submit review"}</button>
+    </div>`;
+  renderStarPicker();
+}
+function renderStarPicker(){
+  const el = document.getElementById("starPicker");
+  if (!el) return;
+  const r = window.__currentRating || 0;
+  el.innerHTML = [1,2,3,4,5].map(i => `<span onclick="setRating(${i})">${i <= r ? "&#9733;" : "&#9734;"}</span>`).join("");
+}
+function setRating(i){ window.__currentRating = i; renderStarPicker(); }
+async function submitReview(slugValue){
+  const member = getMemberSession();
+  if (!member) { toast("Please sign in first"); return; }
+  const rating = window.__currentRating || 0;
+  if (!rating) { toast("Pick a star rating"); return; }
+  const comment = document.getElementById("reviewComment").value.trim();
+  const { error } = await sb.from("reviews").upsert(
+    { business_slug: slugValue, member_id: member.id, member_name: member.name, rating, comment },
+    { onConflict: "business_slug,member_id" }
+  );
+  if (error) { toast("Couldn't submit: " + error.message); return; }
+  toast("Review saved — thank you!");
+  logEvent(slugValue, "click", "Submitted Review");
+  loadReviewsSection(slugValue);
+}
+
+/* ============================================================
+   BOOKINGS — requires a customer account first (this is the
+   credibility/accountability step). A request lands in the
+   business's real inbox AND opens WhatsApp for an instant heads-up.
+   Confirmed bookings can be downloaded as a calendar file by
+   either side.
+   ============================================================ */
+function startBookingFlow(el){
+  const slugValue = el.dataset.slug;
+  const businessName = el.dataset.name;
+  const guidelines = el.dataset.guidelines;
+  const member = getMemberSession();
+  if (member) {
+    showBookingForm(slugValue, businessName, guidelines);
+  } else {
+    showMemberAuthModal(() => showBookingForm(slugValue, businessName, guidelines));
+  }
+}
+function showBookingForm(slugValue, businessName, guidelines){
+  const member = getMemberSession();
+  const old = document.getElementById("bookingModal");
+  if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", `
+    <div class="modal-bg" id="bookingModal" onclick="if(event.target.id==='bookingModal') closeBookingModal()">
+      <div class="modal">
+        <p style="font-weight:700;margin:0 0 4px;">Request a booking</p>
+        <p class="hint" style="margin-bottom:14px;">Sent straight to ${esc(businessName)} — they'll confirm with you directly.</p>
+        ${guidelines ? `
+          <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;text-align:left;">
+            <p style="font-size:11.5px;color:var(--cyan);font-weight:700;margin:0 0 4px;">Booking guidelines from ${esc(businessName)}</p>
+            <p style="font-size:12.5px;color:var(--text-dim);margin:0;white-space:pre-wrap;">${esc(guidelines)}</p>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;text-align:left;font-size:12.5px;color:var(--text-dim);margin-bottom:14px;">
+            <input type="checkbox" id="bk_agree" style="margin-top:2px;"> I've read and agree to the booking guidelines above.
+          </label>` : ""}
+        <div class="field" style="text-align:left;"><label>Your name</label><input id="bk_name" value="${esc(member ? member.name : "")}"></div>
+        <div class="field" style="text-align:left;"><label>Phone number</label><input id="bk_phone" value="${esc(member ? member.phone : "")}"></div>
+        <div class="field" style="text-align:left;"><label>Preferred date</label><input id="bk_date" type="date"></div>
+        <div class="field" style="text-align:left;"><label>Preferred time</label><input id="bk_time" type="time"></div>
+        <div class="field" style="text-align:left;"><label>Note (optional)</label><input id="bk_note" placeholder="Party size, special request, etc."></div>
+        <button class="btn" onclick="submitBooking('${slugValue}','${esc(businessName).replace(/'/g,"\\'")}', ${guidelines ? "true" : "false"})">Send request</button>
+        <button class="btn secondary" style="margin-top:8px;" onclick="closeBookingModal()">Cancel</button>
+      </div>
+    </div>`);
+}
+async function submitBooking(slugValue, businessName, guidelinesRequired){
+  if (guidelinesRequired) {
+    const agreeBox = document.getElementById("bk_agree");
+    if (!agreeBox || !agreeBox.checked) { toast("Please confirm you've read the booking guidelines"); return; }
+  }
+  const name = document.getElementById("bk_name").value.trim();
+  const phone = document.getElementById("bk_phone").value.trim();
+  const date = document.getElementById("bk_date").value;
+  const time = document.getElementById("bk_time").value;
+  const note = document.getElementById("bk_note").value.trim();
+  if (!name || !phone) { toast("Please enter your name and phone"); return; }
+
+  const member = getMemberSession();
+  const record = {
+    business_slug: slugValue, member_id: member ? member.id : null,
+    customer_name: name, customer_phone: phone,
+    preferred_date: date, preferred_time: time, note, status: "pending",
+  };
+  const { error } = await sb.from("bookings").insert(record);
+  if (error) { toast("Couldn't send request: " + error.message); return; }
+
+  logEvent(slugValue, "click", "Booking Request");
+  closeBookingModal();
+  toast("Request sent!");
+
+  const waText = `Hi, I'd like to request a booking${date ? " on " + date : ""}${time ? " at " + time : ""}. Name: ${name}${note ? ". Note: " + note : ""}`;
+  const { data: bizRow } = await sb.from("customers").select("whatsapp_number").eq("slug", slugValue).maybeSingle();
+  if (bizRow && bizRow.whatsapp_number) {
+    window.open(`https://wa.me/${digits(bizRow.whatsapp_number)}?text=${encodeURIComponent(waText)}`, "_blank");
+  }
+}
+function closeBookingModal(){ const m = document.getElementById("bookingModal"); if (m) m.remove(); }
+
+/* ---- Calendar export (.ics) for confirmed bookings, either side ---- */
+function buildIcsForBooking(id, businessName, date, time, note){
+  const dateDigits = (date || "").replace(/-/g, "");
+  const timeDigits = (time || "").replace(":", "");
+  if (!dateDigits) return null;
+  let dtStart, dtEnd, allDay = false;
+  if (timeDigits) {
+    dtStart = `${dateDigits}T${timeDigits}00`;
+    const [h, m] = time.split(":").map(Number);
+    const endH = Math.min(h + 1, 23);
+    dtEnd = `${dateDigits}T${String(endH).padStart(2,"0")}${String(m).padStart(2,"0")}00`;
+  } else {
+    allDay = true;
+    dtStart = dateDigits;
+    dtEnd = dateDigits;
+  }
+  return [
+    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ReviewTapOperate//EN","BEGIN:VEVENT",
+    `UID:rto-booking-${id}@reviewtapoperate`,
+    allDay ? `DTSTART;VALUE=DATE:${dtStart}` : `DTSTART:${dtStart}`,
+    allDay ? `DTEND;VALUE=DATE:${dtEnd}` : `DTEND:${dtEnd}`,
+    `SUMMARY:Booking at ${businessName}`,
+    `DESCRIPTION:${(note || "").replace(/\r?\n/g, " ")}`,
+    "END:VEVENT","END:VCALENDAR"
+  ].join("\r\n");
+}
+function downloadIcsFromEl(el){
+  const ics = buildIcsForBooking(el.dataset.id, el.dataset.name, el.dataset.date, el.dataset.time, el.dataset.note);
+  if (!ics) { toast("No date set for this booking yet"); return; }
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `booking-${el.dataset.id}.ics`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+/* ---- Bookings inbox, used by both business owner and admin ---- */
+function showBookingsInbox(slugValue, businessName){
+  const old = document.getElementById("bookingsInboxModal");
+  if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", `
+    <div class="modal-bg" id="bookingsInboxModal" onclick="if(event.target.id==='bookingsInboxModal') closeBookingsInbox()">
+      <div class="modal" style="text-align:left;max-width:420px;">
+        <p style="font-weight:700;margin:0 0 12px;">${esc(businessName)} — bookings</p>
+        <div id="bookingsInboxBody"><p class="hint">Loading…</p></div>
+        <button class="btn secondary" style="margin-top:16px;" onclick="closeBookingsInbox()">Close</button>
+      </div>
+    </div>`);
+  loadBookingsInbox(slugValue, businessName);
+}
+async function loadBookingsInbox(slugValue, businessName){
+  const body = document.getElementById("bookingsInboxBody");
+  const { data, error } = await sb.from("bookings").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
+  if (!body) return;
+  if (error) { body.innerHTML = `<p class="hint">Couldn't load: ${esc(error.message)}</p>`; return; }
+  if (!data.length) { body.innerHTML = `<p class="hint">No booking requests yet.</p>`; return; }
+  body.innerHTML = data.map(b => `
+    <div style="background:var(--panel-2);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;"><b style="font-size:13.5px;">${esc(b.customer_name)}</b><span style="font-size:11px;color:${b.status==='confirmed'?'#2ECC71':b.status==='declined'?'#FF6B6B':'var(--text-dim)'};text-transform:capitalize;">${esc(b.status)}</span></div>
+      <div class="hint" style="margin:2px 0;">${esc(b.customer_phone)} ${b.preferred_date ? "· " + esc(b.preferred_date) : ""} ${b.preferred_time ? "· " + esc(b.preferred_time) : ""}</div>
+      ${b.note ? `<div class="hint" style="margin:2px 0;">${esc(b.note)}</div>` : ""}
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        ${b.status !== "confirmed" ? `<button class="btn secondary" style="width:auto;padding:5px 10px;font-size:11.5px;" onclick="setBookingStatus(${b.id},'confirmed','${slugValue}','${esc(businessName).replace(/'/g,"\\'")}')">Confirm</button>` : ""}
+        ${b.status !== "declined" ? `<button class="btn secondary" style="width:auto;padding:5px 10px;font-size:11.5px;" onclick="setBookingStatus(${b.id},'declined','${slugValue}','${esc(businessName).replace(/'/g,"\\'")}')">Decline</button>` : ""}
+        ${b.status === "confirmed" ? `<button class="btn secondary" style="width:auto;padding:5px 10px;font-size:11.5px;" data-id="${b.id}" data-name="${esc(businessName)}" data-date="${esc(b.preferred_date||"")}" data-time="${esc(b.preferred_time||"")}" data-note="${esc(b.note||"")}" onclick="downloadIcsFromEl(this)">Add to Calendar</button>` : ""}
+      </div>
+    </div>`).join("");
+}
+async function setBookingStatus(id, status, slugValue, businessName){
+  const { error } = await sb.from("bookings").update({ status }).eq("id", id);
+  if (error) { toast("Couldn't update: " + error.message); return; }
+  loadBookingsInbox(slugValue, businessName);
+}
+function closeBookingsInbox(){ const m = document.getElementById("bookingsInboxModal"); if (m) m.remove(); }
+
+/* ============================================================
+   MY ACCOUNT — a signed-in customer's own dashboard: their booking
+   history across every business they've interacted with.
+   ============================================================ */
+function openMyAccount(){
+  const member = getMemberSession();
+  if (member) renderMyAccountPage(member);
+  else showMemberAuthModal(() => renderMyAccountPage(getMemberSession()));
+}
+async function renderMyAccountPage(member){
+  app.innerHTML = `
+    <div class="wrap" style="max-width:460px;">
+      <div class="top-bar">
+        <div class="brand" style="margin:20px 0 0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
+        <button class="icon-btn" title="Log out" onclick="clearMemberSession(); renderLanding('home')">&#8630;</button>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <p style="font-weight:700;margin:0 0 4px;">Hi, ${esc(member.name)}</p>
+        <p class="hint">Your booking requests across every business on RTO.</p>
+      </div>
+      <div id="myBookingsHolder" style="margin-top:16px;"><p class="muted">Loading…</p></div>
+      <button class="btn secondary" style="margin-top:16px;" onclick="renderLanding('home')">Back to site</button>
+    </div>`;
+  const { data, error } = await sb.from("bookings").select("*, customers(name)").eq("member_id", member.id).order("created_at", { ascending: false });
+  const holder = document.getElementById("myBookingsHolder");
+  if (!holder) return;
+  if (error) { holder.innerHTML = `<p class="muted">Couldn't load: ${esc(error.message)}</p>`; return; }
+  if (!data.length) { holder.innerHTML = `<p class="muted" style="text-align:center;padding:20px 0;">No booking requests yet.</p>`; return; }
+  holder.innerHTML = data.map(b => `
+    <div class="row-item" style="margin-bottom:10px;flex-wrap:wrap;">
+      <div>
+        <div class="name">${esc((b.customers && b.customers.name) || "Business")}</div>
+        <div class="hint">${b.preferred_date ? esc(b.preferred_date) : ""} ${b.preferred_time ? "· " + esc(b.preferred_time) : ""}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:${b.status==='confirmed'?'#2ECC71':b.status==='declined'?'#FF6B6B':'var(--text-dim)'};text-transform:capitalize;">${esc(b.status)}</span>
+        ${b.status === "confirmed" ? `<button class="btn secondary" style="width:auto;padding:5px 10px;font-size:11px;" data-id="${b.id}" data-name="${esc((b.customers && b.customers.name) || "Business")}" data-date="${esc(b.preferred_date||"")}" data-time="${esc(b.preferred_time||"")}" data-note="${esc(b.note||"")}" onclick="downloadIcsFromEl(this)">Add to Calendar</button>` : ""}
+      </div>
+    </div>`).join("");
+}
 function sharePage(el){
   const slugValue = el.dataset.slug;
   const name = el.dataset.name;
@@ -466,6 +813,7 @@ function renderLanding(view){
         <button class="btn" onclick="renderLanding('signup')">Get started</button>
         <button class="btn secondary" onclick="renderLanding('login')">Business login</button>
         <button class="btn secondary" onclick="renderLanding('search')">Find a business</button>
+        <button class="btn secondary" onclick="openMyAccount()">My account</button>
       </div>
 
       <div class="card" style="margin-top:28px;">
@@ -705,9 +1053,17 @@ function renderCompareBar(){
     : "";
 }
 
-function renderComparisonView(){
+async function renderComparisonView(){
   const items = compareSelection.map(sl => __searchCache.find(c => c.slug === sl)).filter(Boolean);
   const allMenuNames = [...new Set(items.flatMap(c => (c.menu_items || []).map(m => m.name)))];
+  const slugs = items.map(c => c.slug);
+  const { data: allReviews } = await sb.from("reviews").select("business_slug,rating").in("business_slug", slugs);
+  const ratingFor = (slug) => {
+    const rows = (allReviews || []).filter(r => r.business_slug === slug);
+    if (!rows.length) return "No reviews yet";
+    const avg = rows.reduce((s,r) => s + r.rating, 0) / rows.length;
+    return `${avg.toFixed(1)} &#9733; (${rows.length})`;
+  };
 
   app.innerHTML = `
     <div class="wrap" style="max-width:600px;">
@@ -716,6 +1072,7 @@ function renderComparisonView(){
         <p style="font-weight:700;margin:0 0 14px;">Comparing ${items.length} businesses</p>
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
           <tr><td></td>${items.map(c => `<td style="padding:8px;text-align:center;font-weight:700;">${esc(c.name)}</td>`).join("")}</tr>
+          <tr><td class="hint">Rating</td>${items.map(c => `<td style="text-align:center;padding:6px;color:var(--pink);">${ratingFor(c.slug)}</td>`).join("")}</tr>
           <tr><td class="hint">Type</td>${items.map(c => `<td style="text-align:center;padding:6px;">${esc((BIZ_TYPES.find(t=>t.value===c.business_type)||{}).label||"")}</td>`).join("")}</tr>
           <tr><td class="hint">Status</td>${items.map(c => `<td style="text-align:center;padding:6px;">${c.is_open !== false ? "Open" : "Closed"}</td>`).join("")}</tr>
           <tr><td class="hint">WhatsApp</td>${items.map(c => `<td style="text-align:center;padding:6px;">${c.whatsapp_number ? `<a href="https://wa.me/${digits(c.whatsapp_number)}" target="_blank" style="color:var(--cyan);">Chat</a>` : "—"}</td>`).join("")}</tr>
@@ -813,6 +1170,7 @@ async function loadCustomerList(){
         <button class="icon-btn" title="Edit" onclick="editCustomer('${c.slug}')">&#9998;</button>
         <button class="icon-btn" title="Owner access" onclick="showOwnerAccessModal('${c.slug}')">&#128272;</button>
         <button class="icon-btn" title="Analytics" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128202;</button>
+        <button class="icon-btn" title="Bookings" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128197;</button>
         <button class="icon-btn" title="Copy link" onclick="copyLink('${c.slug}')">&#128279;</button>
         <button class="icon-btn" title="QR code" onclick="showQr('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#9642;</button>
         <button class="icon-btn" title="Delete customer" onclick="deleteCustomer('${c.slug}')">&#128465;</button>
@@ -887,10 +1245,19 @@ function customerFormFieldsHtml(c, existing){
           <button type="button" id="f_isopen_switch" class="toggle-switch ${(c.is_open !== false) ? "on" : "off"}" onclick="toggleOpenStatus()">
             <span class="toggle-knob"></span>
           </button>
-          <span id="isOpenStatusText" style="font-weight:700;">${(c.is_open !== false) ? "Open" : "Closed"}</span>
+          <span id="isOpenStatusText" style="font-weight:700;">${esc(c.status_on_label || statusLabelDefaults(c.business_type).on)}</span>
         </div>
         <input type="hidden" id="f_isopen" value="${(c.is_open !== false) ? "true" : "false"}">
-        <div class="hint">Tap to flip between Open and Closed. Shows as a small badge on your page — no confusion, one click.</div>
+        <div class="hint">Tap to flip the status. The two labels below decide what it actually says — pick whatever fits how your business works.</div>
+      </div>
+      <div class="field">
+        <label>Label when switched ON</label>
+        <input id="f_status_on" value="${esc(c.status_on_label || statusLabelDefaults(c.business_type).on)}" placeholder="e.g. Open, Available, Accepting bookings" oninput="onStatusLabelInput()">
+      </div>
+      <div class="field">
+        <label>Label when switched OFF</label>
+        <input id="f_status_off" value="${esc(c.status_off_label || statusLabelDefaults(c.business_type).off)}" placeholder="e.g. Closed, Unavailable, Fully booked" oninput="onStatusLabelInput()">
+        <div class="hint">A restaurant might use "Open/Closed." A real estate agent might prefer "Available/Unavailable." A stylist might use "Booking now/Fully booked." Whatever fits.</div>
       </div>
       <div class="field">
         <label>Public search</label>
@@ -910,6 +1277,13 @@ function customerFormFieldsHtml(c, existing){
         <label>Google Maps link (optional)</label>
         <input id="f_maps_url" value="${esc(c.maps_url||"")}" placeholder="Paste your Google Maps share link">
         <div class="hint">Open Google Maps → search your business → Share → Copy link → paste it here. Adds a "Get Directions" button to your page.</div>
+      </div>
+
+      <div class="section-label">Booking settings</div>
+      <div class="field">
+        <label>Your booking guidelines / policy (optional)</label>
+        <textarea id="f_booking_guidelines" rows="3" placeholder="e.g. A KES 1,000 deposit is required to confirm. Cancellations need 24 hours notice." style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;margin-top:5px;">${esc(c.booking_guidelines||"")}</textarea>
+        <div class="hint">Shown to the customer before they can send a booking request — they must tick a box confirming they've read it. Leave blank if you don't have any special requirements.</div>
       </div>
 
       <div class="section-label">Save Contact button</div>
@@ -1185,8 +1559,11 @@ async function saveCustomer(){
     business_type: bizType,
     title: document.getElementById("f_title").value.trim(),
     is_open: document.getElementById("f_isopen").value === "true",
+    status_on_label: document.getElementById("f_status_on").value.trim() || "Open",
+    status_off_label: document.getElementById("f_status_off").value.trim() || "Closed",
     address: document.getElementById("f_address").value.trim(),
     maps_url: document.getElementById("f_maps_url").value.trim(),
+    booking_guidelines: document.getElementById("f_booking_guidelines").value.trim(),
     listed_in_directory: document.getElementById("f_listed").value === "true",
     phone: document.getElementById("f_phone").value.trim(),
     whatsapp_number: document.getElementById("f_wa").value.trim(),
@@ -1256,6 +1633,26 @@ const MENU_BIZ_TYPES = ["restaurant","salon","retail","hospitality"];
 function bizTypeOptions(selected){
   return BIZ_TYPES.map(t => `<option value="${t.value}" ${t.value===(selected||"") ? "selected" : ""}>${esc(t.label)}</option>`).join("");
 }
+const STATUS_LABEL_DEFAULTS = {
+  restaurant:   { on: "Open",      off: "Closed" },
+  salon:        { on: "Open",      off: "Closed" },
+  retail:       { on: "Open",      off: "Closed" },
+  hospitality:  { on: "Open",      off: "Closed" },
+  real_estate:  { on: "Available", off: "Unavailable" },
+  professional: { on: "Available", off: "Unavailable" },
+  other:        { on: "Available", off: "Unavailable" },
+};
+function statusLabelDefaults(bizType){
+  return STATUS_LABEL_DEFAULTS[bizType] || { on: "Open", off: "Closed" };
+}
+function onStatusLabelInput(){
+  const text = document.getElementById("isOpenStatusText");
+  const hidden = document.getElementById("f_isopen");
+  if (!text || !hidden) return;
+  const onLabel = document.getElementById("f_status_on").value.trim() || "Open";
+  const offLabel = document.getElementById("f_status_off").value.trim() || "Closed";
+  text.textContent = hidden.value === "true" ? onLabel : offLabel;
+}
 function toggleOpenStatus(){
   const hidden = document.getElementById("f_isopen");
   const btn = document.getElementById("f_isopen_switch");
@@ -1264,7 +1661,9 @@ function toggleOpenStatus(){
   hidden.value = newState ? "true" : "false";
   btn.classList.toggle("on", newState);
   btn.classList.toggle("off", !newState);
-  text.textContent = newState ? "Open" : "Closed";
+  const onLabel = (document.getElementById("f_status_on") || {}).value || "Open";
+  const offLabel = (document.getElementById("f_status_off") || {}).value || "Closed";
+  text.textContent = newState ? onLabel : offLabel;
 }
 function toggleListedStatus(){
   const hidden = document.getElementById("f_listed");
@@ -1279,8 +1678,21 @@ function toggleListedStatus(){
 function onBizTypeChange(){
   const val = document.getElementById("f_biztype").value;
   const wrap = document.getElementById("menuSectionWrap");
-  if (!wrap) return;
-  wrap.style.display = MENU_BIZ_TYPES.includes(val) ? "" : "none";
+  if (wrap) wrap.style.display = MENU_BIZ_TYPES.includes(val) ? "" : "none";
+
+  // Suggest fresh status labels for the new type, but only into fields the
+  // user hasn't already typed something custom into (blank-check only).
+  const onField = document.getElementById("f_status_on");
+  const offField = document.getElementById("f_status_off");
+  if (onField && offField) {
+    const defaults = statusLabelDefaults(val);
+    const wasDefaultPair = Object.values(STATUS_LABEL_DEFAULTS).some(d => d.on === onField.value.trim() && d.off === offField.value.trim());
+    if (wasDefaultPair || (!onField.value.trim() && !offField.value.trim())) {
+      onField.value = defaults.on;
+      offField.value = defaults.off;
+      onStatusLabelInput();
+    }
+  }
 }
 
 /* ---- QR modal ---- */
@@ -1449,6 +1861,7 @@ function renderOwnerEditor(c){
           <button class="btn" id="saveBtn" onclick="saveCustomer()">Save changes</button>
           <a class="btn outline-cyan" href="${tapLink(c.slug)}" target="_blank" rel="noreferrer">View my public page</a>
           <button class="btn secondary" type="button" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">View my analytics</button>
+          <button class="btn secondary" type="button" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">View bookings</button>
         </div>
       </div>
       <p class="hint" style="text-align:center;">Need your page fully removed, or lost your code? Contact ReviewTapOperate directly — this isn't something you can undo from here.</p>
@@ -1501,7 +1914,9 @@ function renderPublicProfileData(c){
 
   const socialList = (c.social_links && c.social_links.length) ? c.social_links : legacySocialSeed(c);
   const isOpen = c.is_open !== false; // default to Open when unset
-  const statusBadge = `<span class="status-badge ${isOpen ? "open" : "closed"}"><span class="dot"></span>${isOpen ? "Open now" : "Closed"}</span>`;
+  const onLabel = c.status_on_label || statusLabelDefaults(c.business_type).on;
+  const offLabel = c.status_off_label || statusLabelDefaults(c.business_type).off;
+  const statusBadge = `<span class="status-badge ${isOpen ? "open" : "closed"}"><span class="dot"></span>${esc(isOpen ? onLabel : offLabel)}</span>`;
 
   // Full/Half hero mode only makes sense with an actual cover photo — otherwise fall back to compact automatically
   const effectiveCoverStyle = c.background_url ? (c.cover_style || "compact") : "compact";
@@ -1543,6 +1958,14 @@ function renderPublicProfileData(c){
         <div class="strip">${c.portfolio.map(p => portfolioCard(p)).join("")}</div>
       ` : ""}
 
+      <p class="p-section-h" id="section-book">Book a visit</p>
+      <div id="bookingWrap" style="margin-bottom:8px;">
+        <button class="btn outline-cyan" data-slug="${esc(s)}" data-name="${esc(c.name)}" data-guidelines="${esc(c.booking_guidelines||"")}" onclick="startBookingFlow(this)">Request a booking</button>
+      </div>
+
+      <p class="p-section-h" id="section-reviews">Reviews</p>
+      <div id="reviewsSection"><p class="hint">Loading reviews…</p></div>
+
       <p class="footer-tag">Powered by ReviewTapOperate</p>
       <a href="https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent("Hi, I saw a ReviewTapOperate page and I'm interested in getting one for my own business")}" target="_blank" rel="noreferrer" class="footer-tag" style="text-decoration:underline;display:block;margin-top:4px;">Want a page like this for your business? Contact us</a>`;
 
@@ -1564,6 +1987,7 @@ function renderPublicProfileData(c){
         ${belowSections}
       </div>`;
   }
+  loadReviewsSection(s);
 }
 function socialTube(soc, colorClass, slugValue){
   const meta = socialMeta(soc.platform);
