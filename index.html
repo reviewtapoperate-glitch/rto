@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ReviewTapOperate</title>
+<meta name="description" content="ReviewTapOperate — one tap or scan gets you a business's contact, menu, reviews, and more.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -135,6 +136,9 @@
   .icon-badge.pink{color:var(--pink);border-color:rgba(255,46,136,0.35);}
   .icon-badge.cyan{color:var(--cyan);border-color:rgba(0,229,255,0.35);}
   .pay-row{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+  .info-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:20px;}
+  .info-card p{margin:0;}
+  .info-card .info-title{font-weight:700;font-size:14px;margin-bottom:4px;}
   .pay-row .value{font-family:'Manrope';font-weight:800;font-size:19px;color:var(--pink);letter-spacing:0.02em;}
   .menu-image-wrap{margin-bottom:14px;cursor:zoom-in;}
   .menu-image-wrap img{width:100%;border-radius:14px;border:1px solid var(--line);display:block;}
@@ -170,7 +174,7 @@
 const SUPABASE_URL = "https://ptmznpjsgdkasvywufcx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg";
 const ADMIN_PASSCODE = "RTO2026"; // change this before real use
-const CONTACT_WHATSAPP = "254700201922"; // your real WhatsApp number — replace before going live
+const CONTACT_WHATSAPP = "254700000000"; // your real WhatsApp number — replace before going live
 
 const configured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
 let libsLoaded = true;
@@ -196,6 +200,30 @@ function toast(msg){
   setTimeout(() => t.classList.remove("show"), 2400);
 }
 function esc(s){ return (s||"").toString().replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
+
+/* Every business gets its own real page title and description instead of
+   the site's generic one — this is what shows up in a Google search
+   result and in the browser tab, and it was completely missing before. */
+function setPageSeoTags(c){
+  const titleParts = [c.name];
+  if (c.title) titleParts.push(c.title);
+  titleParts.push("ReviewTapOperate");
+  document.title = titleParts.join(" — ");
+
+  const descBits = [];
+  if (c.title) descBits.push(c.title);
+  if (c.address) descBits.push(c.address);
+  if (c.menu_items && c.menu_items.length) descBits.push(c.menu_items.slice(0,3).map(m => m.name).join(", "));
+  const description = (c.name + (descBits.length ? " — " + descBits.join(" · ") : " — find contact info, reviews, and more.")).slice(0, 160);
+
+  let metaTag = document.querySelector('meta[name="description"]');
+  if (!metaTag) {
+    metaTag = document.createElement("meta");
+    metaTag.setAttribute("name", "description");
+    document.head.appendChild(metaTag);
+  }
+  metaTag.setAttribute("content", description);
+}
 function digits(v){ return (v||"").replace(/[^\d+]/g,""); }
 function initials(name){ return (name||"?").split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
 function tapLink(s){ return window.location.origin + window.location.pathname + "?c=" + s; }
@@ -301,7 +329,7 @@ async function loadReviewsSection(slugValue){
       <span class="hint" style="margin:0;">(${reviews.length} review${reviews.length === 1 ? "" : "s"})</span>
     </div>`;
     html += reviews.slice(0, 5).map(r => `
-      <div style="background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:8px;">
+      <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;"><b style="font-size:13px;">${esc(r.member_name || "Anonymous")}</b><span style="color:var(--pink);font-size:12px;">${"&#9733;".repeat(r.rating)}</span></div>
         ${r.comment ? `<p style="font-size:13px;margin:6px 0 0;color:var(--text-dim);">${esc(r.comment)}</p>` : ""}
       </div>`).join("");
@@ -378,21 +406,22 @@ function showBookingForm(slugValue, businessName, guidelines){
   document.body.insertAdjacentHTML("beforeend", `
     <div class="modal-bg" id="bookingModal" onclick="if(event.target.id==='bookingModal') closeBookingModal()">
       <div class="modal">
-        <p style="font-weight:700;margin:0 0 4px;">Request a booking</p>
-        <p class="hint" style="margin-bottom:14px;">Sent straight to ${esc(businessName)} — they'll confirm with you directly.</p>
+        <p style="font-weight:700;margin:0 0 4px;">Send a request</p>
+        <p class="hint" style="margin-bottom:14px;">Sent straight to ${esc(businessName)} — they'll confirm with you directly. Works for an appointment, a product order, anything.</p>
         ${guidelines ? `
           <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;text-align:left;">
-            <p style="font-size:11.5px;color:var(--cyan);font-weight:700;margin:0 0 4px;">Booking guidelines from ${esc(businessName)}</p>
+            <p style="font-size:11.5px;color:var(--cyan);font-weight:700;margin:0 0 4px;">Guidelines from ${esc(businessName)}</p>
             <p style="font-size:12.5px;color:var(--text-dim);margin:0;white-space:pre-wrap;">${esc(guidelines)}</p>
           </div>
           <label style="display:flex;align-items:flex-start;gap:8px;text-align:left;font-size:12.5px;color:var(--text-dim);margin-bottom:14px;">
-            <input type="checkbox" id="bk_agree" style="margin-top:2px;"> I've read and agree to the booking guidelines above.
+            <input type="checkbox" id="bk_agree" style="margin-top:2px;"> I've read and agree to the guidelines above.
           </label>` : ""}
         <div class="field" style="text-align:left;"><label>Your name</label><input id="bk_name" value="${esc(member ? member.name : "")}"></div>
         <div class="field" style="text-align:left;"><label>Phone number</label><input id="bk_phone" value="${esc(member ? member.phone : "")}"></div>
-        <div class="field" style="text-align:left;"><label>Preferred date</label><input id="bk_date" type="date"></div>
-        <div class="field" style="text-align:left;"><label>Preferred time</label><input id="bk_time" type="time"></div>
-        <div class="field" style="text-align:left;"><label>Note (optional)</label><input id="bk_note" placeholder="Party size, special request, etc."></div>
+        <div class="field" style="text-align:left;"><label>What are you requesting?</label><input id="bk_item" placeholder="e.g. Haircut &amp; beard trim, or Red dress size M x2"></div>
+        <div class="field" style="text-align:left;"><label>Preferred date (optional)</label><input id="bk_date" type="date"></div>
+        <div class="field" style="text-align:left;"><label>Preferred time (optional, for appointments)</label><input id="bk_time" type="time"></div>
+        <div class="field" style="text-align:left;"><label>Note (optional)</label><input id="bk_note" placeholder="Party size, delivery vs pickup, special request, etc."></div>
         <button class="btn" onclick="submitBooking('${slugValue}','${esc(businessName).replace(/'/g,"\\'")}', ${guidelines ? "true" : "false"})">Send request</button>
         <button class="btn secondary" style="margin-top:8px;" onclick="closeBookingModal()">Cancel</button>
       </div>
@@ -405,6 +434,7 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
   }
   const name = document.getElementById("bk_name").value.trim();
   const phone = document.getElementById("bk_phone").value.trim();
+  const item = document.getElementById("bk_item").value.trim();
   const date = document.getElementById("bk_date").value;
   const time = document.getElementById("bk_time").value;
   const note = document.getElementById("bk_note").value.trim();
@@ -413,7 +443,7 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
   const member = getMemberSession();
   const record = {
     business_slug: slugValue, member_id: member ? member.id : null,
-    customer_name: name, customer_phone: phone,
+    customer_name: name, customer_phone: phone, item_requested: item,
     preferred_date: date, preferred_time: time, note, status: "pending",
   };
   const { error } = await sb.from("bookings").insert(record);
@@ -423,7 +453,7 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
   closeBookingModal();
   toast("Request sent!");
 
-  const waText = `Hi, I'd like to request a booking${date ? " on " + date : ""}${time ? " at " + time : ""}. Name: ${name}${note ? ". Note: " + note : ""}`;
+  const waText = `Hi, I'd like to request: ${item || "a booking"}${date ? " on " + date : ""}${time ? " at " + time : ""}. Name: ${name}${note ? ". Note: " + note : ""}`;
   const { data: bizRow } = await sb.from("customers").select("whatsapp_number").eq("slug", slugValue).maybeSingle();
   if (bizRow && bizRow.whatsapp_number) {
     window.open(`https://wa.me/${digits(bizRow.whatsapp_number)}?text=${encodeURIComponent(waText)}`, "_blank");
@@ -490,6 +520,7 @@ async function loadBookingsInbox(slugValue, businessName){
   body.innerHTML = data.map(b => `
     <div style="background:var(--panel-2);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;"><b style="font-size:13.5px;">${esc(b.customer_name)}</b><span style="font-size:11px;color:${b.status==='confirmed'?'#2ECC71':b.status==='declined'?'#FF6B6B':'var(--text-dim)'};text-transform:capitalize;">${esc(b.status)}</span></div>
+      ${b.item_requested ? `<div style="font-size:12.5px;font-weight:600;color:var(--cyan);margin-top:3px;">${esc(b.item_requested)}</div>` : ""}
       <div class="hint" style="margin:2px 0;">${esc(b.customer_phone)} ${b.preferred_date ? "· " + esc(b.preferred_date) : ""} ${b.preferred_time ? "· " + esc(b.preferred_time) : ""}</div>
       ${b.note ? `<div class="hint" style="margin:2px 0;">${esc(b.note)}</div>` : ""}
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
@@ -1240,15 +1271,33 @@ function customerFormFieldsHtml(c, existing){
       </div>
       <div class="field"><label>Title / business type detail</label><input id="f_title" value="${esc(c.title||"")}" placeholder='e.g. "Founder, Bright Salon" or "Real Estate Agent"'></div>
       <div class="field">
-        <label>Business status</label>
+        <label>Automatic schedule</label>
         <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
-          <button type="button" id="f_isopen_switch" class="toggle-switch ${(c.is_open !== false) ? "on" : "off"}" onclick="toggleOpenStatus()">
+          <button type="button" id="f_schedule_switch" class="toggle-switch ${(c.schedule && c.schedule.enabled) ? "on" : "off"}" onclick="toggleScheduleMode()">
             <span class="toggle-knob"></span>
           </button>
-          <span id="isOpenStatusText" style="font-weight:700;">${esc(c.status_on_label || statusLabelDefaults(c.business_type).on)}</span>
+          <span id="scheduleStatusText" style="font-weight:700;">${(c.schedule && c.schedule.enabled) ? "Automatic, from hours below" : "Manual switch"}</span>
         </div>
-        <input type="hidden" id="f_isopen" value="${(c.is_open !== false) ? "true" : "false"}">
-        <div class="hint">Tap to flip the status. The two labels below decide what it actually says — pick whatever fits how your business works.</div>
+        <input type="hidden" id="f_schedule_enabled" value="${(c.schedule && c.schedule.enabled) ? "true" : "false"}">
+        <div class="hint">When on, your status badge switches itself based on the weekly hours you set below — no need to touch anything day to day. When off, you control it manually with the switch underneath.</div>
+      </div>
+      <div id="manualStatusWrap" style="display:${(c.schedule && c.schedule.enabled) ? "none" : ""};">
+        <div class="field">
+          <label>Business status</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+            <button type="button" id="f_isopen_switch" class="toggle-switch ${(c.is_open !== false) ? "on" : "off"}" onclick="toggleOpenStatus()">
+              <span class="toggle-knob"></span>
+            </button>
+            <span id="isOpenStatusText" style="font-weight:700;">${esc(c.status_on_label || statusLabelDefaults(c.business_type).on)}</span>
+          </div>
+          <input type="hidden" id="f_isopen" value="${(c.is_open !== false) ? "true" : "false"}">
+          <div class="hint">Tap to flip the status. The two labels below decide what it actually says — pick whatever fits how your business works.</div>
+        </div>
+      </div>
+      <div id="scheduleRowsWrap" style="display:${(c.schedule && c.schedule.enabled) ? "" : "none"};margin-bottom:16px;">
+        <label style="display:block;margin-bottom:8px;">Weekly hours</label>
+        ${SCHEDULE_DAYS.map(d => scheduleRowHtml(d, (c.schedule && c.schedule[d.key]))).join("")}
+        <div class="hint">Times you cross midnight (e.g. 6pm–2am) are handled correctly — just enter the real open and close times.</div>
       </div>
       <div class="field">
         <label>Label when switched ON</label>
@@ -1280,6 +1329,11 @@ function customerFormFieldsHtml(c, existing){
       </div>
 
       <div class="section-label">Booking settings</div>
+      <div class="field">
+        <label>Section label shown to customers</label>
+        <input id="f_booking_label" value="${esc(c.booking_label || "Book a visit")}" placeholder='e.g. "Book a visit" for appointments, "Order now" for products'>
+        <div class="hint">This same feature works for appointments (a salon) or orders (a clothing shop) — just rename it to match what your customers are actually doing.</div>
+      </div>
       <div class="field">
         <label>Your booking guidelines / policy (optional)</label>
         <textarea id="f_booking_guidelines" rows="3" placeholder="e.g. A KES 1,000 deposit is required to confirm. Cancellations need 24 hours notice." style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;margin-top:5px;">${esc(c.booking_guidelines||"")}</textarea>
@@ -1559,11 +1613,13 @@ async function saveCustomer(){
     business_type: bizType,
     title: document.getElementById("f_title").value.trim(),
     is_open: document.getElementById("f_isopen").value === "true",
+    schedule: collectScheduleFromForm(),
     status_on_label: document.getElementById("f_status_on").value.trim() || "Open",
     status_off_label: document.getElementById("f_status_off").value.trim() || "Closed",
     address: document.getElementById("f_address").value.trim(),
     maps_url: document.getElementById("f_maps_url").value.trim(),
     booking_guidelines: document.getElementById("f_booking_guidelines").value.trim(),
+    booking_label: document.getElementById("f_booking_label").value.trim() || "Book a visit",
     listed_in_directory: document.getElementById("f_listed").value === "true",
     phone: document.getElementById("f_phone").value.trim(),
     whatsapp_number: document.getElementById("f_wa").value.trim(),
@@ -1627,6 +1683,7 @@ const BIZ_TYPES = [
   { value:"hospitality",   label:"Hotel / Event / Hospitality" },
   { value:"real_estate",   label:"Real Estate / Property" },
   { value:"professional",  label:"Professional Services / Freelancer" },
+  { value:"parking",       label:"Parking / Vehicle Services" },
   { value:"other",         label:"Other / General" },
 ];
 const MENU_BIZ_TYPES = ["restaurant","salon","retail","hospitality"];
@@ -1640,11 +1697,95 @@ const STATUS_LABEL_DEFAULTS = {
   hospitality:  { on: "Open",      off: "Closed" },
   real_estate:  { on: "Available", off: "Unavailable" },
   professional: { on: "Available", off: "Unavailable" },
+  parking:      { on: "Spaces Available", off: "Full" },
   other:        { on: "Available", off: "Unavailable" },
 };
 function statusLabelDefaults(bizType){
   return STATUS_LABEL_DEFAULTS[bizType] || { on: "Open", off: "Closed" };
 }
+const SCHEDULE_DAYS = [
+  { key:"mon", label:"Monday" }, { key:"tue", label:"Tuesday" }, { key:"wed", label:"Wednesday" },
+  { key:"thu", label:"Thursday" }, { key:"fri", label:"Friday" }, { key:"sat", label:"Saturday" }, { key:"sun", label:"Sunday" },
+];
+function scheduleRowHtml(day, data){
+  const d = data || { open:"09:00", close:"18:00", closed:false };
+  return `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+      <span style="width:78px;font-size:12.5px;color:var(--text-dim);flex-shrink:0;">${day.label}</span>
+      <input type="time" id="sched_${day.key}_open" value="${d.open||'09:00'}" style="flex:1;min-width:95px;margin:0;" ${d.closed ? "disabled" : ""}>
+      <span style="font-size:12px;color:var(--text-dim);">to</span>
+      <input type="time" id="sched_${day.key}_close" value="${d.close||'18:00'}" style="flex:1;min-width:95px;margin:0;" ${d.closed ? "disabled" : ""}>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;">
+        <input type="checkbox" id="sched_${day.key}_closed" ${d.closed ? "checked" : ""} onchange="onScheduleDayClosedToggle('${day.key}')"> Closed
+      </label>
+    </div>`;
+}
+function onScheduleDayClosedToggle(dayKey){
+  const closed = document.getElementById(`sched_${dayKey}_closed`).checked;
+  document.getElementById(`sched_${dayKey}_open`).disabled = closed;
+  document.getElementById(`sched_${dayKey}_close`).disabled = closed;
+}
+function toggleScheduleMode(){
+  const hidden = document.getElementById("f_schedule_enabled");
+  const btn = document.getElementById("f_schedule_switch");
+  const text = document.getElementById("scheduleStatusText");
+  const newState = hidden.value !== "true";
+  hidden.value = newState ? "true" : "false";
+  btn.classList.toggle("on", newState);
+  btn.classList.toggle("off", !newState);
+  text.textContent = newState ? "Automatic, from hours below" : "Manual switch";
+  document.getElementById("manualStatusWrap").style.display = newState ? "none" : "";
+  document.getElementById("scheduleRowsWrap").style.display = newState ? "" : "none";
+}
+function collectScheduleFromForm(){
+  const schedule = { enabled: document.getElementById("f_schedule_enabled").value === "true" };
+  SCHEDULE_DAYS.forEach(day => {
+    schedule[day.key] = {
+      open: document.getElementById(`sched_${day.key}_open`).value || "09:00",
+      close: document.getElementById(`sched_${day.key}_close`).value || "18:00",
+      closed: document.getElementById(`sched_${day.key}_closed`).checked,
+    };
+  });
+  return schedule;
+}
+
+/* Returns true/false if a schedule is active and tells us the current
+   status, or null if no schedule is set (caller should fall back to the
+   manual switch). Handles hours that cross midnight correctly. nowOverride
+   is only used by tests, to check specific days/times deterministically. */
+function computeScheduledStatus(schedule, nowOverride){
+  if (!schedule || !schedule.enabled) return null;
+  const dayIndexToKey = ["sun","mon","tue","wed","thu","fri","sat"];
+  const now = nowOverride || new Date();
+  const todayKey = dayIndexToKey[now.getDay()];
+  const yesterdayKey = dayIndexToKey[(now.getDay() + 6) % 7];
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const toMinutes = (t) => { const [h,m] = (t||"00:00").split(":").map(Number); return h*60+m; };
+  const today = schedule[todayKey];
+  const yesterday = schedule[yesterdayKey];
+
+  if (today && !today.closed) {
+    const openM = toMinutes(today.open);
+    const closeM = toMinutes(today.close);
+    if (closeM > openM) {
+      if (nowMinutes >= openM && nowMinutes < closeM) return true;
+    } else {
+      // crosses midnight (e.g. 18:00 -> 02:00): open from openM through end of day
+      if (nowMinutes >= openM) return true;
+    }
+  }
+  if (yesterday && !yesterday.closed) {
+    const yOpenM = toMinutes(yesterday.open);
+    const yCloseM = toMinutes(yesterday.close);
+    if (yCloseM <= yOpenM) {
+      // yesterday's hours crossed into today — still open if before that close time
+      if (nowMinutes < yCloseM) return true;
+    }
+  }
+  return false;
+}
+
 function onStatusLabelInput(){
   const text = document.getElementById("isOpenStatusText");
   const hidden = document.getElementById("f_isopen");
@@ -1911,9 +2052,11 @@ function subscribeToLiveUpdates(slugValue){
 function renderPublicProfileData(c){
   const s = c.slug;
   applyTheme(c.theme || "neon");
+  setPageSeoTags(c);
 
   const socialList = (c.social_links && c.social_links.length) ? c.social_links : legacySocialSeed(c);
-  const isOpen = c.is_open !== false; // default to Open when unset
+  const scheduledStatus = computeScheduledStatus(c.schedule);
+  const isOpen = scheduledStatus !== null ? scheduledStatus : (c.is_open !== false); // schedule wins if active, else the manual switch
   const onLabel = c.status_on_label || statusLabelDefaults(c.business_type).on;
   const offLabel = c.status_off_label || statusLabelDefaults(c.business_type).off;
   const statusBadge = `<span class="status-badge ${isOpen ? "open" : "closed"}"><span class="dot"></span>${esc(isOpen ? onLabel : offLabel)}</span>`;
@@ -1958,13 +2101,17 @@ function renderPublicProfileData(c){
         <div class="strip">${c.portfolio.map(p => portfolioCard(p)).join("")}</div>
       ` : ""}
 
-      <p class="p-section-h" id="section-book">Book a visit</p>
-      <div id="bookingWrap" style="margin-bottom:8px;">
-        <button class="btn outline-cyan" data-slug="${esc(s)}" data-name="${esc(c.name)}" data-guidelines="${esc(c.booking_guidelines||"")}" onclick="startBookingFlow(this)">Request a booking</button>
+      <p class="p-section-h" id="section-book">${esc(c.booking_label || "Book a visit")}</p>
+      <div class="info-card">
+        <div class="info-title">${esc(c.booking_label || "Ready to visit?")}</div>
+        <p class="hint" style="margin-bottom:12px;">Send your preferred date and time — they'll confirm with you directly.</p>
+        <div id="bookingWrap">
+          <button class="btn outline-cyan" data-slug="${esc(s)}" data-name="${esc(c.name)}" data-guidelines="${esc(c.booking_guidelines||"")}" onclick="startBookingFlow(this)">Request a booking</button>
+        </div>
       </div>
 
       <p class="p-section-h" id="section-reviews">Reviews</p>
-      <div id="reviewsSection"><p class="hint">Loading reviews…</p></div>
+      <div class="info-card" id="reviewsSection"><p class="hint">Loading reviews…</p></div>
 
       <p class="footer-tag">Powered by ReviewTapOperate</p>
       <a href="https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent("Hi, I saw a ReviewTapOperate page and I'm interested in getting one for my own business")}" target="_blank" rel="noreferrer" class="footer-tag" style="text-decoration:underline;display:block;margin-top:4px;">Want a page like this for your business? Contact us</a>`;
