@@ -15,7 +15,7 @@ BEGIN
   END IF;
 END $$;
 
-DO $
+DO $$
 BEGIN
   -- The live schema may already have a unique constraint under another name.
   -- Avoid creating a redundant second unique index when the key already exists.
@@ -29,7 +29,7 @@ BEGIN
     CREATE UNIQUE INDEX reviews_business_slug_member_id_uidx
       ON public.reviews (business_slug, member_id);
   END IF;
-END $;
+END $$;
 
 CREATE INDEX IF NOT EXISTS bookings_business_slug_idx
   ON public.bookings (business_slug);
