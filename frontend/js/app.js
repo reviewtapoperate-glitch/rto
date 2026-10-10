@@ -293,7 +293,7 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
     preferred_date: date, preferred_time: time, note, status: "pending",
   };
   let error = null;
-  try { await rtoApi("booking-submit", { slug: slugValue, name, phone, item, date, time, note }); } catch (e) { error = e; }
+  try { await rtoApi("booking-submit", { slug: slugValue, name, phone, item, date, time, note, guidelinesAccepted: !guidelinesRequired || Boolean(document.getElementById("bk_agree")?.checked) }); } catch (e) { error = e; }
   if (error) { toast("Couldn't send request: " + error.message); return; }
 
   logEvent(slugValue, "click", "Booking Request");
