@@ -61,7 +61,7 @@ function randomAccessCode() {
   return Array.from(bytes, b => chars[b % chars.length]).join("");
 }
 async function hashCredential(value, secret) { return "hmac-sha256:" + await sign("rto-credential:" + value, secret); }
-async function supabaseRequest(path, method = "GET", body) {
+async function supabaseRequest(path, method = "GET", body, prefer = "return=representation") {
   const url = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
   if (!key) throw new Error("Server authentication is not configured.");
@@ -71,7 +71,7 @@ async function supabaseRequest(path, method = "GET", body) {
       apikey: key,
       authorization: "Bearer " + key,
       "content-type": "application/json",
-      prefer: "return=representation"
+      prefer
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
@@ -208,6 +208,145 @@ export default async (request, context) => {
       const member = { id: row.id, name: row.name, phone: row.phone };
       const token = await makeSession({ role: "member", member }, sessionSecret);
       return json({ ok: true, member }, 200, { "set-cookie": sessionCookie(token) });
+    }
+    if (action === "public-customer") {
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
+      const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      const row = Array.isArray(rows) ? rows[0] : null;
+      return row ? json({ customer: safeOwnerRecord(row) }) : json({ error: "Business page not found." }, 404);
+    }
+    if (action === "directory") {
+      const rows = await supabaseRequest("customers?select=*&listed_in_directory=eq.true&order=name.asc&limit=1000");
+      return json({ customers: Array.isArray(rows) ? rows.map(safeOwnerRecord) : [] });
+    }
+    if (action === "slug-exists") {
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ exists: false });
+      const rows = await supabaseRequest("customers?select=slug&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      return json({ exists: Array.isArray(rows) && rows.length > 0 });
+    }
+    if (action === "admin-customers-list") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const rows = await supabaseRequest("customers?select=*&order=created_at.desc&limit=1000");
+      return json({ customers: Array.isArray(rows) ? rows.map(safeOwnerRecord) : [] });
+    }
+    if (action === "customer-save") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || !["admin", "owner"].includes(session.role)) return json({ error: "Sign-in required." }, 403);
+      const incoming = body?.record;
+      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return json({ error: "Invalid business profile." }, 400);
+      const slug = session.role === "owner" ? session.slug : String(incoming.slug || "").trim().toLowerCase();
+      if (!slug || !/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
+      if (session.role === "owner" && incoming.slug && incoming.slug !== session.slug) return json({ error: "Business owners cannot change their page link. Contact RTO for help." }, 403);
+      const allowed = ["name","business_type","title","phone","whatsapp_number","whatsapp_message","google_review_url","instagram","linkedin","till_number","till_label","portfolio","photo_url","background_url","menu_items","menu_image_url","portfolio_title","theme","social_links","is_open","connect_label","pay_label","menu_label","cover_style","cover_overlay","listed_in_directory","booking_guidelines","status_on_label","status_off_label","schedule","booking_label","address","maps_url"];
+      const record = { slug };
+      for (const key of allowed) if (Object.prototype.hasOwnProperty.call(incoming, key)) record[key] = incoming[key];
+      if (!String(record.name || "").trim() || !String(record.business_type || "").trim()) return json({ error: "Business name and type are required." }, 400);
+      if (session.role === "owner") {
+        const exists = await supabaseRequest("customers?select=slug&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+        if (!Array.isArray(exists) || !exists.length) return json({ error: "Your business page could not be found." }, 404);
+        const rows = await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "PATCH", record);
+        return json({ ok: true, customer: safeOwnerRecord(Array.isArray(rows) ? rows[0] : null) });
+      }
+      const rows = await supabaseRequest("customers?on_conflict=slug", "POST", record, "resolution=merge-duplicates,return=representation");
+      return json({ ok: true, customer: safeOwnerRecord(Array.isArray(rows) ? rows[0] : null) });
+    }
+    if (action === "customer-delete") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
+      await supabaseRequest("bookings?business_slug=eq." + encodeURIComponent(slug), "DELETE");
+      await supabaseRequest("reviews?business_slug=eq." + encodeURIComponent(slug), "DELETE");
+      await supabaseRequest("page_events?slug=eq." + encodeURIComponent(slug), "DELETE");
+      await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "DELETE");
+      return json({ ok: true });
+    }
+    if (action === "reviews-list") {
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
+      const session = await readSession(request, sessionSecret);
+      const rows = await supabaseRequest("reviews?select=id,business_slug,member_id,member_name,rating,comment,created_at&business_slug=eq." + encodeURIComponent(slug) + "&order=created_at.desc&limit=500");
+      const ownId = session?.role === "member" ? session.member?.id : null;
+      return json({ reviews: Array.isArray(rows) ? rows.map(r => ({ ...r, member_id: ownId && r.member_id === ownId ? r.member_id : null })) : [] });
+    }
+    if (action === "reviews-for-slugs") {
+      const slugs = Array.isArray(body?.slugs) ? body.slugs.filter(x => typeof x === "string" && /^[a-z0-9-]{1,80}$/.test(x)).slice(0, 100) : [];
+      if (!slugs.length) return json({ reviews: [] });
+      const list = slugs.map(x => encodeURIComponent(x)).join(",");
+      const rows = await supabaseRequest("reviews?select=business_slug,rating&business_slug=in.(" + list + ")&limit=2000");
+      return json({ reviews: Array.isArray(rows) ? rows : [] });
+    }
+    if (action === "review-submit") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "member" || !session.member?.id) return json({ error: "Please sign in first." }, 401);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      const rating = Number(body?.rating);
+      const comment = String(body?.comment || "").trim().slice(0, 2000);
+      if (!/^[a-z0-9-]{1,80}$/.test(slug) || !Number.isInteger(rating) || rating < 1 || rating > 5) return json({ error: "Choose a rating from 1 to 5." }, 400);
+      const memberRows = await supabaseRequest("members?select=id,name& id=eq." + encodeURIComponent(session.member.id) + "&limit=1");
+      const member = Array.isArray(memberRows) ? memberRows[0] : null;
+      if (!member) return json({ error: "Member session is no longer valid. Please sign in again." }, 401);
+      const rows = await supabaseRequest("reviews?on_conflict=business_slug,member_id", "POST", { business_slug: slug, member_id: member.id, member_name: member.name, rating, comment }, "resolution=merge-duplicates,return=representation");
+      return json({ ok: true, review: Array.isArray(rows) ? rows[0] : null });
+    }
+    if (action === "booking-submit") {
+      const name = String(body?.name || "").trim().slice(0, 120);
+      const phone = normalizePhone(body?.phone);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      const item = String(body?.item || "").trim().slice(0, 250);
+      const date = String(body?.date || "").trim().slice(0, 40);
+      const time = String(body?.time || "").trim().slice(0, 40);
+      const note = String(body?.note || "").trim().slice(0, 2000);
+      if (!/^[a-z0-9-]{1,80}$/.test(slug) || name.length < 2 || phone.length < 7) return json({ error: "Enter your name and a valid phone number." }, 400);
+      const biz = await supabaseRequest("customers?select=slug&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      if (!Array.isArray(biz) || !biz.length) return json({ error: "Business page not found." }, 404);
+      const session = await readSession(request, sessionSecret);
+      const memberId = session?.role === "member" ? session.member?.id : null;
+      const rows = await supabaseRequest("bookings", "POST", { business_slug: slug, member_id: memberId, customer_name: name, customer_phone: phone, item_requested: item, preferred_date: date, preferred_time: time, note, status: "pending" });
+      return json({ ok: true, booking: Array.isArray(rows) ? rows[0] : null }, 201);
+    }
+    if (action === "bookings-list") {
+      const session = await readSession(request, sessionSecret);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!session || !["admin", "owner"].includes(session.role) || !/^[a-z0-9-]{1,80}$/.test(slug) || (session.role === "owner" && session.slug !== slug)) return json({ error: "Not authorized to view these bookings." }, 403);
+      const rows = await supabaseRequest("bookings?select=*&business_slug=eq." + encodeURIComponent(slug) + "&order=created_at.desc&limit=500");
+      return json({ bookings: Array.isArray(rows) ? rows : [] });
+    }
+    if (action === "booking-status") {
+      const session = await readSession(request, sessionSecret);
+      const id = String(body?.id || "").trim();
+      const status = String(body?.status || "");
+      if (!session || !["admin", "owner"].includes(session.role) || !/^\d+$/.test(id) || !["pending","confirmed","completed","cancelled","declined"].includes(status)) return json({ error: "Invalid booking update." }, 403);
+      const current = await supabaseRequest("bookings?select=id,business_slug&id=eq." + encodeURIComponent(id) + "&limit=1");
+      const booking = Array.isArray(current) ? current[0] : null;
+      if (!booking || (session.role === "owner" && session.slug !== booking.business_slug)) return json({ error: "Not authorized to update this booking." }, 403);
+      await supabaseRequest("bookings?id=eq." + encodeURIComponent(id), "PATCH", { status });
+      return json({ ok: true });
+    }
+    if (action === "member-bookings") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "member" || !session.member?.id) return json({ error: "Please sign in to view your bookings." }, 401);
+      const rows = await supabaseRequest("bookings?select=*,customers(name)&member_id=eq." + encodeURIComponent(session.member.id) + "&order=created_at.desc&limit=500");
+      return json({ bookings: Array.isArray(rows) ? rows : [] });
+    }
+    if (action === "analytics") {
+      const session = await readSession(request, sessionSecret);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!session || !["admin", "owner"].includes(session.role) || !/^[a-z0-9-]{1,80}$/.test(slug) || (session.role === "owner" && session.slug !== slug)) return json({ error: "Not authorized to view analytics." }, 403);
+      const rows = await supabaseRequest("page_events?select=event_type,link_label&slug=eq." + encodeURIComponent(slug) + "&limit=5000");
+      return json({ events: Array.isArray(rows) ? rows : [] });
+    }
+    if (action === "event-log") {
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      const eventType = String(body?.eventType || "");
+      const label = String(body?.label || "").trim().slice(0, 200);
+      if (!/^[a-z0-9-]{1,80}$/.test(slug) || !["view","click"].includes(eventType)) return json({ ok: true });
+      const exists = await supabaseRequest("customers?select=slug&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      if (Array.isArray(exists) && exists.length) await supabaseRequest("page_events", "POST", { slug, event_type: eventType, link_label: label || null });
+      return json({ ok: true });
     }
     if (action === "owner-profile") {
       const session = await readSession(request, sessionSecret);
