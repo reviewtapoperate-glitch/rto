@@ -164,7 +164,8 @@ function closeMemberAuthModal(){ const m = document.getElementById("memberAuthMo
 async function loadReviewsSection(slugValue){
   const holder = document.getElementById("reviewsSection");
   if (!holder) return;
-  const { data, error } = await sb.from("reviews").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
+  let data; let error = null;
+  try { data = (await rtoApi("reviews-list", { slug: slugValue })).reviews || []; } catch (e) { error = e; data = []; }
   if (!document.getElementById("reviewsSection")) return; // navigated away already
   if (error) { holder.innerHTML = `<p class="hint">Couldn't load reviews.</p>`; return; }
   const reviews = data || [];
@@ -224,10 +225,8 @@ async function submitReview(slugValue){
   const rating = window.__currentRating || 0;
   if (!rating) { toast("Pick a star rating"); return; }
   const comment = document.getElementById("reviewComment").value.trim();
-  const { error } = await sb.from("reviews").upsert(
-    { business_slug: slugValue, member_id: member.id, member_name: member.name, rating, comment },
-    { onConflict: "business_slug,member_id" }
-  );
+  let error = null;
+  try { await rtoApi("review-submit", { slug: slugValue, rating, comment }); } catch (e) { error = e; }
   if (error) { toast("Couldn't submit: " + error.message); return; }
   toast("Review saved — thank you!");
   logEvent(slugValue, "click", "Submitted Review");
@@ -301,7 +300,8 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
     customer_name: name, customer_phone: phone, item_requested: item,
     preferred_date: date, preferred_time: time, note, status: "pending",
   };
-  const { error } = await sb.from("bookings").insert(record);
+  let error = null;
+  try { await rtoApi("booking-submit", { slug: slugValue, name, phone, item, date, time, note }); } catch (e) { error = e; }
   if (error) { toast("Couldn't send request: " + error.message); return; }
 
   logEvent(slugValue, "click", "Booking Request");
@@ -370,7 +370,8 @@ async function loadBookingsInbox(slugValue, businessName){
   if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Booking inbox is disabled in this verification preview."); return; }
 
   const body = document.getElementById("bookingsInboxBody");
-  const { data, error } = await sb.from("bookings").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
+  let data; let error = null;
+  try { data = (await rtoApi("bookings-list", { slug: slugValue })).bookings || []; } catch (e) { error = e; data = []; }
   if (!body) return;
   if (error) { body.innerHTML = `<p class="hint">Couldn't load: ${esc(error.message)}</p>`; return; }
   if (!data.length) { body.innerHTML = `<p class="hint">No booking requests yet.</p>`; return; }
@@ -390,7 +391,8 @@ async function loadBookingsInbox(slugValue, businessName){
 async function setBookingStatus(id, status, slugValue, businessName){
   if (blockPreviewWrite("Booking changes are disabled in the verification preview.")) return;
 
-  const { error } = await sb.from("bookings").update({ status }).eq("id", id);
+  let error = null;
+  try { await rtoApi("booking-status", { id, status }); } catch (e) { error = e; }
   if (error) { toast("Couldn't update: " + error.message); return; }
   loadBookingsInbox(slugValue, businessName);
 }
@@ -421,7 +423,8 @@ async function renderMyAccountPage(member){
       <div id="myBookingsHolder" style="margin-top:16px;"><p class="muted">Loading…</p></div>
       <button class="btn secondary" style="margin-top:16px;" onclick="renderLanding('home')">Back to site</button>
     </div>`;
-  const { data, error } = await sb.from("bookings").select("*, customers(name)").eq("member_id", member.id).order("created_at", { ascending: false });
+  let data; let error = null;
+  try { data = (await rtoApi("member-bookings")).bookings || []; } catch (e) { error = e; data = []; }
   const holder = document.getElementById("myBookingsHolder");
   if (!holder) return;
   if (error) { holder.innerHTML = `<p class="muted">Couldn't load: ${esc(error.message)}</p>`; return; }
@@ -550,7 +553,7 @@ function logEvent(slugValue, type, label){
   if (IS_NETLIFY_PREVIEW) return;
 
   if (!sb) return;
-  try { sb.from("page_events").insert({ slug: slugValue, event_type: type, link_label: label || null }); } catch(e) { /* best-effort, never blocks the visitor */ }
+  try { rtoApi("event-log", { slug: slugValue, eventType: type, label: label || null }); } catch(e) { /* best-effort, never blocks the visitor */ }
 }
 function renderAnalyticsModal(slugValue, name){
   const old = document.getElementById("analyticsModal");
@@ -569,7 +572,8 @@ async function loadAnalyticsData(slugValue){
   if (IS_NETLIFY_PREVIEW) { const body = document.getElementById("analyticsBody"); if (body) body.innerHTML = "<p class=\"hint\">Analytics are disabled in this verification preview.</p>"; return; }
 
   const body = document.getElementById("analyticsBody");
-  const { data, error } = await sb.from("page_events").select("event_type,link_label").eq("slug", slugValue);
+  let data; let error = null;
+  try { data = (await rtoApi("analytics", { slug: slugValue })).events || []; } catch (e) { error = e; data = []; }
   if (!body) return; // modal already closed
   if (error) { body.innerHTML = `<p class="hint">Couldn't load analytics: ${esc(error.message)}</p>`; return; }
   const views = data.filter(e => e.event_type === "view").length;
@@ -952,7 +956,7 @@ async function renderComparisonView(){
   const items = compareSelection.map(sl => __searchCache.find(c => c.slug === sl)).filter(Boolean);
   const allMenuNames = [...new Set(items.flatMap(c => (c.menu_items || []).map(m => m.name)))];
   const slugs = items.map(c => c.slug);
-  const { data: allReviews } = await sb.from("reviews").select("business_slug,rating").in("business_slug", slugs);
+  const allReviews = (await rtoApi("reviews-for-slugs", { slugs })).reviews || [];
   const ratingFor = (slug) => {
     const rows = (allReviews || []).filter(r => r.business_slug === slug);
     if (!rows.length) return "No reviews yet";
