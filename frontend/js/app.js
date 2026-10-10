@@ -1,191 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ReviewTapOperate</title>
-<meta name="description" content="ReviewTapOperate — one tap or scan gets you a business's contact, menu, reviews, and more.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<style>
-  :root{
-    --bg:#0A0A10; --panel:#14141C; --panel-2:#1B1B25;
-    --pink:#FF2E88; --cyan:#00E5FF;
-    --text:#F1F0F5; --text-dim:#8A8A99; --line:rgba(255,255,255,0.08);
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;
-    background-image:radial-gradient(circle at 20% 0%, rgba(255,46,136,0.10), transparent 45%),
-                      radial-gradient(circle at 85% 15%, rgba(0,229,255,0.08), transparent 40%);
-    background-attachment:fixed;
-  }
-  a{color:inherit;}
-  .wrap{width:100%;max-width:440px;margin:0 auto;padding:0 20px 60px;}
-  .center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-  .brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:28px;}
-  .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--pink);color:#0A0A10;font-weight:800;font-size:12.5px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(255,46,136,0.5);}
-  .brand span{font-weight:700;letter-spacing:-0.01em;}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;}
-  input, textarea, select{
-    width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
-    padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none;margin-top:5px;
-  }
-  input:focus, textarea:focus, select:focus{border-color:var(--cyan);}
-  input[type=file]{padding:8px;font-size:12.5px;color:var(--text-dim);}
-  label{font-size:12.5px;color:var(--text-dim);font-weight:600;}
-  .hint{font-size:11.5px;color:#5E5E6B;margin-top:4px;line-height:1.4;}
-  .field{margin-bottom:16px;}
-  .section-label{font-size:11.5px;font-weight:700;text-transform:none;letter-spacing:0.01em;color:var(--cyan);margin:22px 0 12px;}
-  .section-label:first-child{margin-top:0;}
-  .btn{
-    display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    background:var(--pink);color:#0A0A10;font-weight:700;font-size:14px;
-    border:none;border-radius:999px;padding:12px 18px;cursor:pointer;text-decoration:none;width:100%;
-    box-shadow:0 0 18px rgba(255,46,136,0.35);
-  }
-  .btn.secondary{background:transparent;color:var(--text);border:1.5px solid var(--line);box-shadow:none;}
-  .btn.outline-cyan{background:transparent;color:var(--cyan);border:1.5px solid var(--cyan);box-shadow:0 0 14px rgba(0,229,255,0.25);}
-  .btn.danger{background:transparent;color:#FF6B6B;border:1.5px solid rgba(255,107,107,0.4);box-shadow:none;}
-  .btn-row{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;}
-  .btn-row .btn{width:auto;flex:1;min-width:140px;}
-  .row-list{display:flex;flex-direction:column;gap:10px;margin-top:16px;}
-  .row-item{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;flex-wrap:wrap;gap:8px;}
-  .row-item .info{display:flex;align-items:center;gap:10px;min-width:0;}
-  .row-item .avatar{width:36px;height:36px;border-radius:50%;background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-family:'Manrope';font-weight:700;color:var(--pink);font-size:13px;overflow:hidden;flex-shrink:0;}
-  .row-item .avatar img{width:100%;height:100%;object-fit:cover;}
-  .row-item .name{font-size:14px;font-weight:700;}
-  .row-item .slug{font-size:11.5px;color:var(--text-dim);}
-  .icon-btn{width:32px;height:32px;border-radius:8px;background:transparent;border:none;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;}
-  .icon-btn:hover{background:var(--panel-2);color:var(--cyan);}
-  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line);padding:11px 18px;border-radius:11px;font-size:13.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;}
-  .toast.show{opacity:1;}
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px;}
-  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:380px;width:100%;text-align:center;}
-  #qrcanvas-holder{background:#fff;border-radius:12px;padding:16px;display:flex;justify-content:center;margin:16px 0;}
-  .top-bar{display:flex;align-items:center;justify-content:space-between;margin:20px 0 4px;}
-  .muted{color:var(--text-dim);font-size:13.5px;}
-  .setup-warning{background:#2a1420;border:1px solid rgba(255,46,136,0.4);color:#ffc9de;border-radius:12px;padding:16px;font-size:13px;line-height:1.5;margin-bottom:20px;}
-
-  .img-preview-row{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px;background:var(--panel-2);border-radius:10px;}
-  .img-preview-row img{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;}
-  .img-preview-row .txt{flex:1;font-size:12px;color:var(--text-dim);}
-  .img-preview-row button{background:none;border:1px solid rgba(255,107,107,0.4);color:#FF6B6B;font-size:11.5px;font-weight:600;padding:6px 10px;border-radius:7px;cursor:pointer;}
-  .removed-note{font-size:11.5px;color:#FF6B6B;margin-top:6px;display:flex;align-items:center;gap:8px;}
-  .removed-note button{background:none;border:none;color:var(--cyan);text-decoration:underline;cursor:pointer;font-size:11.5px;padding:0;}
-
-  .pf-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px;flex-wrap:wrap;}
-  .pf-row .pf-thumb{width:44px;height:44px;border-radius:8px;background:var(--panel);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim);text-align:center;}
-  .pf-row .pf-thumb img{width:100%;height:100%;object-fit:cover;}
-  .pf-row .pf-fields{flex:1;min-width:140px;}
-  .pf-row .pf-fields input[type=file]{margin-top:0;font-size:11px;}
-  .pf-row .pf-fields input[type=text]{margin-top:6px;}
-  .pf-row .pf-remove{background:none;border:1px solid rgba(255,107,107,0.4);color:#FF6B6B;font-size:11px;font-weight:600;padding:7px 9px;border-radius:7px;cursor:pointer;flex-shrink:0;align-self:center;}
-
-  .soc-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
-  .soc-row select{flex:1;min-width:140px;margin-top:0;}
-  .soc-row input{flex:1.3;min-width:140px;margin-top:0;}
-  .soc-row .pf-remove{background:none;border:1px solid rgba(255,107,107,0.4);color:#FF6B6B;font-size:11px;font-weight:600;padding:9px 10px;border-radius:7px;cursor:pointer;flex-shrink:0;}
-
-  .theme-swatch{display:flex;gap:8px;margin-top:8px;}
-  .theme-swatch span{width:22px;height:22px;border-radius:50%;display:inline-block;border:1px solid rgba(255,255,255,0.2);}
-
-  /* Public tap page */
-  .signbox{text-align:center;padding-top:44px;padding-bottom:8px;}
-  .cover-compact{height:120px;width:100%;background:var(--panel);border-bottom:1px solid var(--line);background-size:cover;background-position:center;cursor:zoom-in;}
-  .cover-half, .cover-full{
-    width:100%;background:var(--panel);background-size:cover;background-position:center;position:relative;
-    display:flex;align-items:center;justify-content:center;cursor:zoom-in;
-  }
-  .cover-half{ min-height:50vh; min-height:50svh; }
-  .cover-full{ min-height:100vh; min-height:100svh; }
-  .cover-overlay{position:absolute;inset:0;background:#000;}
-  .hero-on-cover{position:relative;z-index:1;width:100%;padding:0 20px;}
-  .status-badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:999px;margin-top:10px;}
-  .status-badge.open{background:rgba(46,204,113,0.15);color:#2ECC71;border:1px solid rgba(46,204,113,0.35);}
-  .status-badge.closed{background:rgba(255,107,107,0.15);color:#FF6B6B;border:1px solid rgba(255,107,107,0.35);}
-  .status-badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
-  .toggle-switch{width:52px;height:28px;border-radius:999px;border:none;position:relative;cursor:pointer;padding:0;flex-shrink:0;transition:background .2s;}
-  .toggle-switch.on{background:#2ECC71;}
-  .toggle-switch.off{background:#5A5A66;}
-  .toggle-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
-  .toggle-switch.on .toggle-knob{left:27px;}
-  .avatar-lg{width:88px;height:88px;border-radius:50%;background:var(--panel);border:3px solid var(--bg);margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-family:'Manrope';font-weight:800;font-size:28px;color:var(--pink);overflow:hidden;}
-  .avatar-lg img{width:100%;height:100%;object-fit:cover;}
-  .p-name{font-family:'Caveat',cursive;font-weight:700;font-size:46px;color:var(--pink);
-    text-shadow:0 0 14px rgba(255,46,136,0.55), 0 0 32px rgba(255,46,136,0.3);line-height:1;margin:0;}
-  .p-title{color:var(--text-dim);font-size:13.5px;margin:10px 0 0;}
-  .btn-save-public{
-    display:flex;align-items:center;justify-content:center;margin:24px auto 0;max-width:280px;
-    background:transparent;border:1.5px solid var(--cyan);color:var(--cyan);font-weight:600;font-size:14px;
-    padding:13px;border-radius:999px;text-decoration:none;
-    box-shadow:0 0 16px rgba(0,229,255,0.3), inset 0 0 10px rgba(0,229,255,0.1);
-  }
-  .p-section-h{font-size:12px;color:var(--text-dim);margin:26px 0 10px;padding:0 2px;}
-  .tube{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:12px 16px;text-decoration:none;color:var(--text);margin-bottom:10px;}
-  .tube .dot{width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);flex-shrink:0;}
-  .tube.pink .dot{background:var(--pink);box-shadow:0 0 8px var(--pink);}
-  .tube .l{font-size:14px;font-weight:700;}
-  .tube .s{font-size:11.5px;color:var(--text-dim);}
-  .icon-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;}
-  .icon-badge{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    text-decoration:none;font-weight:800;font-size:11px;letter-spacing:0.01em;border:1px solid var(--line);background:var(--panel);}
-  .icon-badge.pink{color:var(--pink);border-color:rgba(255,46,136,0.35);}
-  .icon-badge.cyan{color:var(--cyan);border-color:rgba(0,229,255,0.35);}
-  .pay-row{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
-  .info-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:20px;}
-  .info-card p{margin:0;}
-  .info-card .info-title{font-weight:700;font-size:14px;margin-bottom:4px;}
-  .pay-row .value{font-family:'Manrope';font-weight:800;font-size:19px;color:var(--pink);letter-spacing:0.02em;}
-  .menu-image-wrap{margin-bottom:14px;cursor:zoom-in;}
-  .menu-image-wrap img{width:100%;border-radius:14px;border:1px solid var(--line);display:block;}
-  .menu-cat{font-size:12px;color:var(--cyan);font-weight:700;margin:16px 4px 8px;}
-  .menu-row{display:flex;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 15px;margin-bottom:7px;font-size:13.5px;}
-  .menu-row .p{color:var(--cyan);font-weight:700;white-space:nowrap;margin-left:10px;}
-  .strip{display:flex;gap:9px;overflow-x:auto;padding-bottom:6px;margin-bottom:20px;}
-  .strip .pc{flex-shrink:0;width:130px;height:104px;border-radius:11px;background:var(--panel);border:1px solid var(--line);
-    display:flex;align-items:flex-end;padding:9px;font-size:11.5px;color:var(--text-dim);position:relative;overflow:hidden;}
-  .strip .pc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-  .strip .pc .cap{position:relative;z-index:1;color:#fff;font-weight:600;}
-  .strip .pc.has-img{background:linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.05) 55%);cursor:zoom-in;}
-  .strip .pc.has-img::before{content:"";position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,0.8), transparent 60%);z-index:0;}
-  .footer-tag{text-align:center;color:#4B4B56;font-size:11.5px;margin-top:24px;}
-
-  .lightbox-bg{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;z-index:90;padding:24px;cursor:zoom-out;}
-  .lightbox-media{display:flex;flex-direction:column;align-items:center;max-width:100%;max-height:100%;cursor:default;}
-  .lightbox-media img{max-width:100%;max-height:70vh;border-radius:12px 12px 0 0;object-fit:contain;cursor:zoom-out;display:block;}
-  .lightbox-caption{background:rgba(20,20,28,0.96);color:#fff;padding:12px 16px;border-radius:0 0 12px 12px;font-size:13.5px;line-height:1.45;width:100%;max-width:420px;box-sizing:border-box;}
-  .lightbox-caption .cap-text{display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;}
-  .lightbox-caption.expanded .cap-text{-webkit-line-clamp:unset;line-clamp:unset;overflow-y:auto;max-height:35vh;}
-  .lightbox-caption .cap-toggle{color:var(--cyan);font-weight:700;font-size:12px;margin-top:6px;cursor:pointer;background:none;border:none;padding:0;}
-</style>
-</head>
-<body>
-<div id="app"></div>
-<div class="toast" id="toast"></div>
-
-<script>
 /* ============================================================
    1. CONFIG
    ============================================================ */
-const SUPABASE_URL = "https://ptmznpjsgdkasvywufcx.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg";
-const ADMIN_PASSCODE = "RTO2026"; // change this before real use
-const CONTACT_WHATSAPP = "254700000000"; // your real WhatsApp number — replace before going live
-
-const configured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
-let libsLoaded = true;
-let sb = null;
-if (configured) {
-  if (typeof supabase === "undefined" || !supabase.createClient) {
-    libsLoaded = false;
-  } else {
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
+const CONTACT_WHATSAPP = "254700000000"; // confirm the business contact number before release
+const IS_NETLIFY_PREVIEW = location.hostname.includes("--reviewtapoperate.netlify.app") || location.hostname.startsWith("deploy-preview-");
+function blockPreviewWrite(message = "This action is disabled in the verification preview. Use a separate staging database for functional testing.") {
+  if (!IS_NETLIFY_PREVIEW) return false;
+  toast(message);
+  return true;
 }
+function renderPreviewAccessNotice(message) {
+  app.innerHTML = `<div class="center-screen"><div class="wrap" style="max-width:420px;"><div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div><div class="card"><h2 style="margin-top:0;">Verification preview</h2><p class="hint" style="font-size:13px;color:var(--text);">${esc(message)}</p><p class="hint">This preview is connected to the production Supabase project. Privileged screens are disabled here to prevent accidental production changes.</p><a class="btn" href="/">Return to preview home</a></div></div></div>`;
+}
+
+const configured = true; // database access is server-side through Netlify Functions
+const libsLoaded = typeof QRCode !== "undefined";
 const BUCKET = "rto-photos";
 
 const app = document.getElementById("app");
@@ -193,6 +21,25 @@ const params = new URLSearchParams(window.location.search);
 const slug = params.get("c");
 const editSlug = params.get("edit");
 
+async function rtoApi(action, payload = {}) {
+  const authActions = new Set(["admin-login", "owner-login", "owner-login-by-code", "member-signup", "member-login", "business-signup", "admin-owner-code", "session", "logout"]);
+  const endpoint = authActions.has(action) ? "/.netlify/functions/rto-auth" : "/.netlify/functions/rto-api";
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ action, ...payload })
+  });
+  let result = {};
+  try { result = await response.json(); } catch {}
+  if (!response.ok) throw new Error(result.error || "The request could not be completed.");
+  return result;
+}
+async function rtoLogout() {
+  try { await rtoApi("logout"); } catch {}
+  sessionStorage.removeItem("rto_admin");
+  clearMemberSession();
+}
 function toast(msg){
   const t = document.getElementById("toast");
   t.textContent = msg;
@@ -275,34 +122,30 @@ function renderMemberAuthTab(tab){
   }
 }
 async function doMemberSignup(){
+  if (blockPreviewWrite("Member sign-up is disabled in the verification preview.")) return;
   const name = document.getElementById("ma_name").value.trim();
   const phone = document.getElementById("ma_phone2").value.trim();
   if (!name || !phone) { toast("Enter your name and phone"); return; }
-  const code = generateOwnerCode();
-  const { data, error } = await sb.from("members").insert({ name, phone, access_code: code }).select().maybeSingle();
-  if (error) {
-    if (error.message && error.message.toLowerCase().includes("duplicate")) {
-      toast("That phone is already registered — try logging in instead");
-    } else {
-      toast("Couldn't sign up: " + error.message);
-    }
-    return;
-  }
-  toast(`Account created! Your access code is ${code} — save it.`);
-  setMemberSession({ id: data.id, name: data.name, phone: data.phone });
-  closeMemberAuthModal();
-  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  try {
+    const result = await rtoApi("member-signup", { name, phone });
+    setMemberSession(result.member);
+    toast("Account created! Your access code is " + result.accessCode + " — save it.");
+    closeMemberAuthModal();
+    if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  } catch (error) { toast(error.message || "Couldn't create account."); }
 }
 async function doMemberLogin(){
+  if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
   const phone = document.getElementById("ma_phone").value.trim();
   const code = document.getElementById("ma_code").value.trim().toUpperCase();
   if (!phone || !code) { toast("Enter your phone and access code"); return; }
-  const { data, error } = await sb.from("members").select("*").eq("phone", phone).maybeSingle();
-  if (error || !data || data.access_code.toUpperCase() !== code) { toast("No match found — check your phone and code"); return; }
-  setMemberSession({ id: data.id, name: data.name, phone: data.phone });
-  toast(`Welcome back, ${data.name}`);
-  closeMemberAuthModal();
-  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  try {
+    const result = await rtoApi("member-login", { phone, code });
+    setMemberSession(result.member);
+    toast("Welcome back, " + result.member.name);
+    closeMemberAuthModal();
+    if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  } catch (error) { toast(error.message || "No match found — check your phone and code."); }
 }
 function closeMemberAuthModal(){ const m = document.getElementById("memberAuthModal"); if (m) m.remove(); }
 
@@ -313,7 +156,8 @@ function closeMemberAuthModal(){ const m = document.getElementById("memberAuthMo
 async function loadReviewsSection(slugValue){
   const holder = document.getElementById("reviewsSection");
   if (!holder) return;
-  const { data, error } = await sb.from("reviews").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
+  let data; let error = null;
+  try { data = (await rtoApi("reviews-list", { slug: slugValue })).reviews || []; } catch (e) { error = e; data = []; }
   if (!document.getElementById("reviewsSection")) return; // navigated away already
   if (error) { holder.innerHTML = `<p class="hint">Couldn't load reviews.</p>`; return; }
   const reviews = data || [];
@@ -366,15 +210,15 @@ function renderStarPicker(){
 }
 function setRating(i){ window.__currentRating = i; renderStarPicker(); }
 async function submitReview(slugValue){
+  if (blockPreviewWrite("Review submissions are disabled in the verification preview.")) return;
+
   const member = getMemberSession();
   if (!member) { toast("Please sign in first"); return; }
   const rating = window.__currentRating || 0;
   if (!rating) { toast("Pick a star rating"); return; }
   const comment = document.getElementById("reviewComment").value.trim();
-  const { error } = await sb.from("reviews").upsert(
-    { business_slug: slugValue, member_id: member.id, member_name: member.name, rating, comment },
-    { onConflict: "business_slug,member_id" }
-  );
+  let error = null;
+  try { await rtoApi("review-submit", { slug: slugValue, rating, comment }); } catch (e) { error = e; }
   if (error) { toast("Couldn't submit: " + error.message); return; }
   toast("Review saved — thank you!");
   logEvent(slugValue, "click", "Submitted Review");
@@ -428,6 +272,8 @@ function showBookingForm(slugValue, businessName, guidelines){
     </div>`);
 }
 async function submitBooking(slugValue, businessName, guidelinesRequired){
+  if (blockPreviewWrite("Booking submissions are disabled in the verification preview.")) return;
+
   if (guidelinesRequired) {
     const agreeBox = document.getElementById("bk_agree");
     if (!agreeBox || !agreeBox.checked) { toast("Please confirm you've read the booking guidelines"); return; }
@@ -446,7 +292,8 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
     customer_name: name, customer_phone: phone, item_requested: item,
     preferred_date: date, preferred_time: time, note, status: "pending",
   };
-  const { error } = await sb.from("bookings").insert(record);
+  let error = null;
+  try { await rtoApi("booking-submit", { slug: slugValue, name, phone, item, date, time, note, guidelinesAccepted: !guidelinesRequired || Boolean(document.getElementById("bk_agree")?.checked) }); } catch (e) { error = e; }
   if (error) { toast("Couldn't send request: " + error.message); return; }
 
   logEvent(slugValue, "click", "Booking Request");
@@ -454,7 +301,7 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
   toast("Request sent!");
 
   const waText = `Hi, I'd like to request: ${item || "a booking"}${date ? " on " + date : ""}${time ? " at " + time : ""}. Name: ${name}${note ? ". Note: " + note : ""}`;
-  const { data: bizRow } = await sb.from("customers").select("whatsapp_number").eq("slug", slugValue).maybeSingle();
+  const bizRow = (await rtoApi("public-customer", { slug: slugValue })).customer;
   if (bizRow && bizRow.whatsapp_number) {
     window.open(`https://wa.me/${digits(bizRow.whatsapp_number)}?text=${encodeURIComponent(waText)}`, "_blank");
   }
@@ -512,8 +359,11 @@ function showBookingsInbox(slugValue, businessName){
   loadBookingsInbox(slugValue, businessName);
 }
 async function loadBookingsInbox(slugValue, businessName){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Booking inbox is disabled in this verification preview."); return; }
+
   const body = document.getElementById("bookingsInboxBody");
-  const { data, error } = await sb.from("bookings").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
+  let data; let error = null;
+  try { data = (await rtoApi("bookings-list", { slug: slugValue })).bookings || []; } catch (e) { error = e; data = []; }
   if (!body) return;
   if (error) { body.innerHTML = `<p class="hint">Couldn't load: ${esc(error.message)}</p>`; return; }
   if (!data.length) { body.innerHTML = `<p class="hint">No booking requests yet.</p>`; return; }
@@ -531,7 +381,10 @@ async function loadBookingsInbox(slugValue, businessName){
     </div>`).join("");
 }
 async function setBookingStatus(id, status, slugValue, businessName){
-  const { error } = await sb.from("bookings").update({ status }).eq("id", id);
+  if (blockPreviewWrite("Booking changes are disabled in the verification preview.")) return;
+
+  let error = null;
+  try { await rtoApi("booking-status", { id, status }); } catch (e) { error = e; }
   if (error) { toast("Couldn't update: " + error.message); return; }
   loadBookingsInbox(slugValue, businessName);
 }
@@ -547,11 +400,13 @@ function openMyAccount(){
   else showMemberAuthModal(() => renderMyAccountPage(getMemberSession()));
 }
 async function renderMyAccountPage(member){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Member account data is disabled in this verification preview."); return; }
+
   app.innerHTML = `
     <div class="wrap" style="max-width:460px;">
       <div class="top-bar">
         <div class="brand" style="margin:20px 0 0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
-        <button class="icon-btn" title="Log out" onclick="clearMemberSession(); renderLanding('home')">&#8630;</button>
+        <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
       <div class="card" style="margin-top:16px;">
         <p style="font-weight:700;margin:0 0 4px;">Hi, ${esc(member.name)}</p>
@@ -560,7 +415,8 @@ async function renderMyAccountPage(member){
       <div id="myBookingsHolder" style="margin-top:16px;"><p class="muted">Loading…</p></div>
       <button class="btn secondary" style="margin-top:16px;" onclick="renderLanding('home')">Back to site</button>
     </div>`;
-  const { data, error } = await sb.from("bookings").select("*, customers(name)").eq("member_id", member.id).order("created_at", { ascending: false });
+  let data; let error = null;
+  try { data = (await rtoApi("member-bookings")).bookings || []; } catch (e) { error = e; data = []; }
   const holder = document.getElementById("myBookingsHolder");
   if (!holder) return;
   if (error) { holder.innerHTML = `<p class="muted">Couldn't load: ${esc(error.message)}</p>`; return; }
@@ -605,9 +461,10 @@ function extractStoragePath(url){
   return url.slice(idx + marker.length);
 }
 async function deleteFromStorage(url){
+  if (blockPreviewWrite("Image deletion is disabled in the verification preview.")) return;
   const path = extractStoragePath(url);
   if (!path) return;
-  try { await sb.storage.from(BUCKET).remove([path]); } catch(e) { /* best-effort */ }
+  try { await rtoApi("delete-image", { path, slug: path.split("/")[0] }); } catch(e) { /* best-effort */ }
 }
 
 /* ============================================================
@@ -684,8 +541,10 @@ function legacySocialSeed(existing){
    Never shown anywhere on the public tap page.
    ============================================================ */
 function logEvent(slugValue, type, label){
+  if (IS_NETLIFY_PREVIEW) return;
+
   if (!sb) return;
-  try { sb.from("page_events").insert({ slug: slugValue, event_type: type, link_label: label || null }); } catch(e) { /* best-effort, never blocks the visitor */ }
+  try { rtoApi("event-log", { slug: slugValue, eventType: type, label: label || null }).catch(() => {}); } catch(e) { /* best-effort, never blocks the visitor */ }
 }
 function renderAnalyticsModal(slugValue, name){
   const old = document.getElementById("analyticsModal");
@@ -701,8 +560,11 @@ function renderAnalyticsModal(slugValue, name){
   loadAnalyticsData(slugValue);
 }
 async function loadAnalyticsData(slugValue){
+  if (IS_NETLIFY_PREVIEW) { const body = document.getElementById("analyticsBody"); if (body) body.innerHTML = "<p class=\"hint\">Analytics are disabled in this verification preview.</p>"; return; }
+
   const body = document.getElementById("analyticsBody");
-  const { data, error } = await sb.from("page_events").select("event_type,link_label").eq("slug", slugValue);
+  let data; let error = null;
+  try { data = (await rtoApi("analytics", { slug: slugValue })).events || []; } catch (e) { error = e; data = []; }
   if (!body) return; // modal already closed
   if (error) { body.innerHTML = `<p class="hint">Couldn't load analytics: ${esc(error.message)}</p>`; return; }
   const views = data.filter(e => e.event_type === "view").length;
@@ -776,7 +638,7 @@ try {
   } else if (editSlug) {
     renderOwnerGate(editSlug);
   } else if (sessionStorage.getItem("rto_admin") === "1") {
-    renderDashboard();
+    renderAdminGate();
   } else {
     renderLanding("home");
   }
@@ -898,36 +760,31 @@ async function resolveUniqueSlug(base){
   let candidate = base || "business";
   let suffix = 1;
   for (let i = 0; i < 20; i++) {
-    const { data } = await sb.from("customers").select("slug").eq("slug", candidate).maybeSingle();
-    if (!data) return candidate;
+    const exists = await rtoApi("slug-exists", { slug: candidate });
+    if (!exists.exists) return candidate;
     suffix++;
     candidate = base + "-" + suffix;
   }
   return base + "-" + Date.now();
 }
 async function doSignup(){
+  if (blockPreviewWrite("Creating business pages is disabled in the verification preview.")) return;
   const name = document.getElementById("su_name").value.trim();
   const bizType = document.getElementById("su_biztype").value;
   const phone = document.getElementById("su_phone").value.trim();
-
   if (!name || !bizType || !phone) { toast("Please fill in every field"); return; }
-
   const btn = document.getElementById("suBtn");
   btn.textContent = "Creating…"; btn.disabled = true;
-
-  const baseSlug = slugify(name);
-  const finalSlug = await resolveUniqueSlug(baseSlug);
-  const code = generateOwnerCode();
-
-  const record = {
-    slug: finalSlug, name, business_type: bizType, phone, owner_code: code,
-    portfolio: [], menu_items: [], social_links: [], portfolio_title: "Recent work", theme: "neon",
-  };
-  const { error } = await sb.from("customers").insert(record);
-  btn.textContent = "Create my account"; btn.disabled = false;
-
-  if (error) { toast("Couldn't create your account: " + error.message); return; }
-  renderSignupSuccess(record);
+  try {
+    const baseSlug = slugify(name);
+    const finalSlug = await resolveUniqueSlug(baseSlug);
+    const result = await rtoApi("business-signup", { name, businessType: bizType, phone, slug: finalSlug });
+    btn.textContent = "Create my account"; btn.disabled = false;
+    renderSignupSuccess(result.customer);
+  } catch (error) {
+    btn.textContent = "Create my account"; btn.disabled = false;
+    toast(error.message || "Couldn't create your account.");
+  }
 }
 function renderSignupSuccess(record){
   window.__pendingSignupRecord = record;
@@ -966,20 +823,21 @@ function renderLoginForm(){
   document.getElementById("li_code").addEventListener("keydown", e => { if(e.key==="Enter") doLogin(); });
 }
 async function doLogin(){
+  if (blockPreviewWrite("Owner sign-in is disabled in the verification preview.")) return;
   const code = document.getElementById("li_code").value.trim().toUpperCase();
   if (!code) { toast("Enter your access code"); return; }
-
   const btn = document.getElementById("liBtn");
   btn.textContent = "Checking…"; btn.disabled = true;
-  const { data, error } = await sb.from("customers").select("*").eq("owner_code", code).maybeSingle();
-  btn.textContent = "Log in"; btn.disabled = false;
-
-  if (error || !data) { toast("That access code doesn't match any account"); return; }
-
-  currentMode = "owner";
-  renderOwnerEditor(data);
+  try {
+    const result = await rtoApi("owner-login-by-code", { code });
+    btn.textContent = "Log in"; btn.disabled = false;
+    currentMode = "owner";
+    renderOwnerEditor(result.customer);
+  } catch (error) {
+    btn.textContent = "Log in"; btn.disabled = false;
+    toast(error.message || "That access code doesn't match any account.");
+  }
 }
-
 /* ============================================================
    PUBLIC DIRECTORY — search by name, business type, or menu item.
    Only businesses with listed_in_directory = true appear here.
@@ -1013,7 +871,8 @@ async function doSearch(){
   holder.innerHTML = `<p class="muted">Searching…</p>`;
 
   if (!__searchCache) {
-    const { data, error } = await sb.from("customers").select("*").eq("listed_in_directory", true);
+    let data; let error = null;
+    try { data = (await rtoApi("directory")).customers || []; } catch (e) { error = e; data = []; }
     if (error) { holder.innerHTML = `<p class="muted">Couldn't search: ${esc(error.message)}</p>`; return; }
     __searchCache = data || [];
   }
@@ -1088,7 +947,7 @@ async function renderComparisonView(){
   const items = compareSelection.map(sl => __searchCache.find(c => c.slug === sl)).filter(Boolean);
   const allMenuNames = [...new Set(items.flatMap(c => (c.menu_items || []).map(m => m.name)))];
   const slugs = items.map(c => c.slug);
-  const { data: allReviews } = await sb.from("reviews").select("business_slug,rating").in("business_slug", slugs);
+  const allReviews = (await rtoApi("reviews-for-slugs", { slugs })).reviews || [];
   const ratingFor = (slug) => {
     const rows = (allReviews || []).filter(r => r.business_slug === slug);
     if (!rows.length) return "No reviews yet";
@@ -1126,7 +985,7 @@ function renderSetupNeeded(){
       <div class="wrap" style="max-width:420px;">
         <div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
         <div class="setup-warning">
-          <b>Setup needed.</b> Find SUPABASE_URL and SUPABASE_ANON_KEY near the top of the script and paste in your real values.
+          <b>Setup needed.</b> Configure the required server-only Netlify Function environment variables before enabling the application.
         </div>
       </div>
     </div>`;
@@ -1136,8 +995,10 @@ function renderSetupNeeded(){
    ADMIN — passcode gate. Reached only via triple-click on the
    landing page logo, or an already-active admin session.
    ============================================================ */
-function renderAdminGate(){
-  if (sessionStorage.getItem("rto_admin") === "1") return renderDashboard();
+async function renderAdminGate(){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative access is disabled in this verification preview."); return; }
+
+  try { const auth = await rtoApi("session"); if (auth.authenticated && auth.session?.role === "admin") return renderDashboard(); } catch {}
   app.innerHTML = `
     <div class="center-screen">
       <div class="wrap" style="max-width:360px;">
@@ -1152,23 +1013,29 @@ function renderAdminGate(){
     </div>`;
   document.getElementById("pass").addEventListener("keydown", e => { if(e.key==="Enter") checkPass(); });
 }
-function checkPass(){
+async function checkPass(){
+  if (blockPreviewWrite("Admin access is disabled in this verification preview.")) return;
   const v = document.getElementById("pass").value;
-  if (v === ADMIN_PASSCODE) { sessionStorage.setItem("rto_admin","1"); renderDashboard(); }
-  else toast("Wrong passcode");
+  if (!v) { toast("Enter the admin passcode"); return; }
+  try {
+    await rtoApi("admin-login", { password: v });
+    sessionStorage.setItem("rto_admin","1");
+    renderDashboard();
+  } catch (error) { toast(error.message || "Admin sign-in failed."); }
 }
-
 
 /* ============================================================
    ADMIN — dashboard
    ============================================================ */
 async function renderDashboard(){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative dashboard is disabled in this verification preview."); return; }
+
   currentMode = "admin";
   app.innerHTML = `
     <div class="wrap">
       <div class="top-bar">
         <div class="brand" style="margin:0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
-        <button class="icon-btn" title="Log out" onclick="sessionStorage.removeItem('rto_admin'); renderLanding('home')">&#8630;</button>
+        <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
       <p class="muted" style="margin:0 0 18px;">Every customer's tap card, one dashboard. Works for any type of business.</p>
       <div class="btn-row" style="margin-top:0;">
@@ -1182,8 +1049,11 @@ async function renderDashboard(){
 
 let __rtoCustomers = [];
 async function loadCustomerList(){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative customer data is disabled in this verification preview."); return; }
+
   const holder = document.getElementById("listHolder");
-  const { data, error } = await sb.from("customers").select("*").order("created_at",{ascending:false});
+  let data; let error = null;
+  try { data = (await rtoApi("admin-customers-list")).customers || []; } catch (e) { error = e; data = []; }
   if (error) { holder.innerHTML = `<p class="muted">Couldn't load customers: ${esc(error.message)}</p>`; return; }
   __rtoCustomers = data;
   if (!data.length) { holder.innerHTML = `<p class="muted">No customers yet — add your first one above.</p>`; return; }
@@ -1199,7 +1069,7 @@ async function loadCustomerList(){
       <div style="display:flex;gap:2px;flex-wrap:wrap;">
         <button class="icon-btn" title="Preview" onclick="window.open(tapLink('${c.slug}'),'_blank')">&#128065;</button>
         <button class="icon-btn" title="Edit" onclick="editCustomer('${c.slug}')">&#9998;</button>
-        <button class="icon-btn" title="Owner access" onclick="showOwnerAccessModal('${c.slug}')">&#128272;</button>
+        <button class="icon-btn" title="Issue/reset owner code" onclick="showOwnerAccessModal('${c.slug}')">&#128272;</button>
         <button class="icon-btn" title="Analytics" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128202;</button>
         <button class="icon-btn" title="Bookings" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128197;</button>
         <button class="icon-btn" title="Copy link" onclick="copyLink('${c.slug}')">&#128279;</button>
@@ -1211,6 +1081,8 @@ async function loadCustomerList(){
 }
 function copyLink(s){ navigator.clipboard.writeText(tapLink(s)); toast("Tap link copied"); }
 async function deleteCustomer(s){
+  if (blockPreviewWrite("Customer deletion is disabled in the verification preview.")) return;
+
   if (!confirm("Delete this customer's whole page? This can't be undone.")) return;
   const c = __rtoCustomers.find(x => x.slug === s);
   if (c) {
@@ -1218,7 +1090,8 @@ async function deleteCustomer(s){
     if (c.background_url) await deleteFromStorage(c.background_url);
     if (c.menu_image_url) await deleteFromStorage(c.menu_image_url);
   }
-  const { error } = await sb.from("customers").delete().eq("slug", s);
+  let error = null;
+  try { await rtoApi("customer-delete", { slug: s }); } catch (e) { error = e; }
   if (error) toast("Couldn't delete: " + error.message);
   else { toast("Deleted"); loadCustomerList(); }
 }
@@ -1549,18 +1422,30 @@ function autoSlug(){
 }
 document.addEventListener("input", e => { if (e.target && e.target.id === "f_slug") slugTouched = true; });
 
+async function rtoUploadFile(file, slugValue, tag){
+  if (!file) return null;
+  if (file.size > 3 * 1024 * 1024) throw new Error("Images must be 3 MB or smaller.");
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.readAsDataURL(file);
+  });
+  const result = await rtoApi("upload-image", { slug: slugValue, tag, filename: file.name, dataUrl });
+  return result.publicUrl;
+}
 async function uploadImage(fileInputId, slugValue, tag){
+  if (blockPreviewWrite("Image uploads are disabled in the verification preview.")) return null;
   const input = document.getElementById(fileInputId);
   const file = input && input.files[0];
   if (!file) return null;
-  const path = `${slugValue}/${tag}-${Date.now()}-${file.name}`;
-  const { error } = await sb.storage.from(BUCKET).upload(path, file, { upsert:true });
-  if (error) { toast("Photo upload failed: " + error.message); return null; }
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  try { return await rtoUploadFile(file, slugValue, tag); }
+  catch (error) { toast("Photo upload failed: " + error.message); return null; }
 }
 
 async function saveCustomer(){
+  if (blockPreviewWrite("Customer edits are disabled in the verification preview.")) return;
+
   const name = document.getElementById("f_name").value.trim();
   const slugValue = slugify(document.getElementById("f_slug").value);
   const bizTypeCheck = document.getElementById("f_biztype").value;
@@ -1579,14 +1464,10 @@ async function saveCustomer(){
     const row = portfolioRows[i];
     let imageUrl = row.existingUrl;
     if (row.newFile) {
-      const path = `${slugValue}/portfolio-${i}-${Date.now()}-${row.newFile.name}`;
-      const { error: upErr } = await sb.storage.from(BUCKET).upload(path, row.newFile, { upsert:true });
-      if (upErr) { toast("A portfolio photo failed to upload: " + upErr.message); }
-      else {
-        const { data: pubData } = sb.storage.from(BUCKET).getPublicUrl(path);
+      try {
+        imageUrl = await rtoUploadFile(row.newFile, slugValue, "portfolio-" + i);
         if (row.existingUrl) deletedPortfolioUrls.push(row.existingUrl);
-        imageUrl = pubData.publicUrl;
-      }
+      } catch (upErr) { toast("A portfolio photo failed to upload: " + upErr.message); }
     }
     if (imageUrl || (row.caption && row.caption.trim())) {
       finalPortfolio.push({ image_url: imageUrl || null, caption: (row.caption || "").trim() });
@@ -1647,7 +1528,8 @@ async function saveCustomer(){
   else if (removeFlags.menu) record.menu_image_url = null;
 
   const wasEditing = !!editingSlug;
-  const { error } = await sb.from("customers").upsert(record, { onConflict: "slug" });
+  let error = null;
+  try { await rtoApi("customer-save", { record }); } catch (e) { error = e; }
   btn.textContent = wasEditing ? "Save changes" : "Save & publish"; btn.disabled = false;
 
   if (error) { toast("Couldn't save: " + error.message); return; }
@@ -1888,16 +1770,13 @@ function closeQr(){ const m = document.getElementById("qrModal"); if (m) m.remov
 
 /* ---- Owner access modal ---- */
 async function showOwnerAccessModal(slug){
-  let c = __rtoCustomers.find(x => x.slug === slug);
+  if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
+  const c = __rtoCustomers.find(x => x.slug === slug);
   if (!c) { toast("Couldn't find that customer"); return; }
-
-  if (!c.owner_code) {
-    const code = generateOwnerCode();
-    const { error } = await sb.from("customers").update({ owner_code: code }).eq("slug", slug);
-    if (error) { toast("Couldn't set up owner access: " + error.message); return; }
-    c.owner_code = code;
-  }
-  renderOwnerAccessModal(c);
+  try {
+    const result = await rtoApi("admin-owner-code", { slug });
+    renderOwnerAccessModal({ ...c, owner_code: result.code });
+  } catch (error) { toast(error.message || "Couldn't issue a new owner access code."); }
 }
 function renderOwnerAccessModal(c){
   const old = document.getElementById("ownerModal");
@@ -1923,14 +1802,15 @@ function renderOwnerAccessModal(c){
     </div>`);
 }
 async function regenerateOwnerCode(slug){
+  if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
   if (!confirm("This makes their old code stop working immediately. Continue?")) return;
-  const code = generateOwnerCode();
-  const { error } = await sb.from("customers").update({ owner_code: code }).eq("slug", slug);
-  if (error) { toast("Couldn't regenerate: " + error.message); return; }
-  const c = __rtoCustomers.find(x => x.slug === slug);
-  if (c) c.owner_code = code;
-  toast("New code generated");
-  renderOwnerAccessModal(c);
+  try {
+    const result = await rtoApi("admin-owner-code", { slug });
+    const c = __rtoCustomers.find(x => x.slug === slug);
+    if (!c) { toast("Couldn't find that customer"); return; }
+    toast("New code generated");
+    renderOwnerAccessModal({ ...c, owner_code: result.code });
+  } catch (error) { toast(error.message || "Couldn't regenerate the code."); }
 }
 function closeOwnerModal(){ const m = document.getElementById("ownerModal"); if (m) m.remove(); }
 
@@ -1938,9 +1818,12 @@ function closeOwnerModal(){ const m = document.getElementById("ownerModal"); if 
    OWNER PORTAL — a business's own private, restricted access
    ============================================================ */
 async function renderOwnerGate(slugValue){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Owner editing is disabled in this verification preview."); return; }
+
   app.innerHTML = `<div class="center-screen"><p class="muted">Loading…</p></div>`;
-  const { data, error } = await sb.from("customers").select("*").eq("slug", slugValue).maybeSingle();
-  if (error || !data) {
+  let data = null;
+  try { const result = await rtoApi("owner-info", { slug: slugValue }); data = result.customer || null; } catch {}
+  if (!data) {
     app.innerHTML = `<div class="center-screen"><div style="text-align:center;"><p style="font-weight:700;">Link not found</p><p class="muted">This business login link isn't set up. Ask RTO to resend it.</p></div></div>`;
     return;
   }
@@ -1962,19 +1845,16 @@ async function renderOwnerGate(slugValue){
   document.getElementById("ownerCode").addEventListener("keydown", e => { if(e.key==="Enter") checkOwnerCode(slugValue); });
   window.__ownerGateRecord = data;
 }
-function checkOwnerCode(slugValue){
+async function checkOwnerCode(slugValue){
+  if (blockPreviewWrite("Owner access is disabled in the verification preview.")) return;
   const entered = document.getElementById("ownerCode").value.trim().toUpperCase();
-  const data = window.__ownerGateRecord;
-  if (!data || !data.owner_code) {
-    toast("Access isn't set up for this business yet — ask RTO to generate a code.");
-    return;
-  }
-  if (entered === data.owner_code.toUpperCase()) {
+  if (!entered) { toast("Enter your access code"); return; }
+  try {
+    const result = await rtoApi("owner-login", { slug: slugValue, code: entered });
+    if (!result.customer) throw new Error("This business access could not be verified.");
     currentMode = "owner";
-    renderOwnerEditor(data);
-  } else {
-    toast("Wrong code");
-  }
+    renderOwnerEditor(result.customer);
+  } catch (error) { toast(error.message || "Incorrect access code or link."); }
 }
 
 function renderOwnerEditor(c){
@@ -1990,7 +1870,7 @@ function renderOwnerEditor(c){
     <div class="wrap">
       <div class="top-bar">
         <div class="brand" style="margin:20px 0 0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
-        <button class="icon-btn" title="Log out" onclick="renderLanding('home')">&#8630;</button>
+        <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
       <div class="card" style="margin:16px 0;">
         <p style="font-weight:700;margin:0 0 4px;">Your page</p>
@@ -2016,7 +1896,8 @@ function renderOwnerEditor(c){
    ============================================================ */
 async function renderPublicProfile(s){
   app.innerHTML = `<div class="center-screen"><p class="muted">Loading…</p></div>`;
-  const { data, error } = await sb.from("customers").select("*").eq("slug", s).maybeSingle();
+  let data; let error = null;
+  try { data = (await rtoApi("public-customer", { slug: s })).customer || null; } catch (e) { error = e; data = null; }
   if (error || !data) {
     app.innerHTML = `<div class="center-screen"><div style="text-align:center;"><p style="font-weight:700;">Profile not found</p><p class="muted">This tap link isn't set up yet.</p></div></div>`;
     return;
@@ -2038,15 +1919,16 @@ function scrollToAnchorIfPresent(){
    page open, it refreshes on its own within a second or two — no reload
    needed. Requires realtime enabled on the customers table (see setup SQL). */
 function subscribeToLiveUpdates(slugValue){
-  if (window.__rtoChannel) {
-    try { sb.removeChannel(window.__rtoChannel); } catch(e) { /* ignore */ }
-  }
-  window.__rtoChannel = sb
-    .channel("public-profile-" + slugValue)
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "customers", filter: `slug=eq.${slugValue}` }, (payload) => {
-      if (payload && payload.new) renderPublicProfileData(payload.new);
-    })
-    .subscribe();
+  if (window.__rtoRefreshTimer) clearInterval(window.__rtoRefreshTimer);
+  // Poll the server-authorized public endpoint instead of subscribing directly
+  // to the raw customers table, which contains private owner credential fields.
+  window.__rtoRefreshTimer = setInterval(async () => {
+    if (!document.body.contains(app) || !new URLSearchParams(window.location.search).get("c")) return;
+    try {
+      const result = await rtoApi("public-customer", { slug: slugValue });
+      if (result.customer) renderPublicProfileData(result.customer);
+    } catch(e) { /* keep the last rendered profile when the network is unavailable */ }
+  }, 30000);
 }
 
 function renderPublicProfileData(c){
@@ -2182,6 +2064,3 @@ function vcard(c){
     c.title?`TITLE:${c.title}`:"", c.phone?`TEL;TYPE=CELL:${c.phone}`:"","END:VCARD"].filter(Boolean);
   return "data:text/vcard;charset=utf-8," + encodeURIComponent(lines.join("\n"));
 }
-</script>
-</body>
-</html>
