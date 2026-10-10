@@ -3,39 +3,46 @@
 Branch: `production-ready-candidate`
 Production remains on `main`. This branch is a review candidate, not a production release.
 
-## Changes in this candidate
+## Candidate changes
 
-- Extracts the existing page into `frontend/index.html`, `frontend/css/styles.css`, and `frontend/js/app.js` without intentionally changing the CSS rules or application logic.
-- Configures Netlify to publish `frontend/`.
-- Copies `robots.txt` into the published frontend.
-- Adds conservative response headers without introducing a restrictive CSP that might break existing inline handlers or third-party dependencies.
-- Detects Netlify deploy previews and blocks admin/owner screens, member sign-in/sign-up, review/booking submissions, customer writes/deletion, uploads, storage deletion, and analytics event writes. The server function also blocks privileged and write actions for non-production deploy contexts.
-- Adds Node syntax and structural smoke checks, including assertions that browser code no longer contains the admin passcode and that sign-in routes through the server API.
-- Adds a GitHub Actions PostgreSQL 17 service-container test for all five forward migrations. The test uses minimal fixture tables, applies migrations twice, and checks expected columns/types/defaults, indexes, RLS enablement, and revocation of direct client table privileges.
-- Adds versioned SQL migrations for schedule/booking fields, missing `address` and `maps_url` fields, review uniqueness/query indexes, access-code hash columns, and a staged lockdown of direct client database/storage mutation privileges.
-- Adds a Netlify server-side API for public business data, admin/owner/member sign-in, business CRUD, bookings, reviews, analytics, and image upload/delete. Admin/owner/member sessions use signed HttpOnly cookies. Browser-side direct Supabase table operations and storage mutations have been removed from the candidate code. Required server-only secrets and migration limitations are documented.
-- Documents that current migration history is not a full database baseline.
+- Extracted the existing page into `frontend/index.html`, `frontend/css/styles.css`, and `frontend/js/app.js`. The existing CSS file and visual theme definitions were preserved; no redesign was made.
+- Configured Netlify to publish `frontend/`, retained `robots.txt`, and added conservative static response headers.
+- Removed direct browser Supabase table and Storage mutations. The frontend now calls a same-origin Netlify Function for business data, reviews, bookings, analytics, and image operations.
+- Added server-verified admin, owner, and member sign-in; signed HttpOnly/Secure/SameSite=Lax cookies; role/slug authorization; one-time access-code generation; keyed access-code hashes; and legacy-code upgrade on successful login.
+- Added server-side image upload validation for JPG/PNG/WEBP/GIF, file signatures, a 3 MB size limit, and role/business path checks.
+- Added server-side guards that block privileged and write actions on non-production Netlify deploy contexts.
+- Added five forward SQL migrations for schedule/booking fields, address/map fields, review uniqueness/indexes, access-code hashes, and removal of broad direct client database/storage privileges.
+- Added structural checks, mocked API authentication tests, and PostgreSQL 17 migration/privilege smoke tests.
 
-## Mandatory blockers before production approval
+## Latest verification
 
-These are not solved by a file split and must not be treated as passed:
+GitHub Actions run [#38068272240](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38068272240) passed on 2026-10-10:
+- Browser JavaScript syntax: passed.
+- Netlify function syntax: passed.
+- Structural frontend checks: passed.
+- Mocked server API authentication checks: passed.
+- All five SQL migrations applied twice to a disposable PostgreSQL 17 fixture: passed.
+- Fixture assertions for RLS enablement and removal of direct client table privileges: passed.
 
-1. **Authorization/security:** the current live RLS policies and grants on production `main` remain overly permissive. The candidate removes direct browser table/storage mutations and routes reads/writes through a server function; candidate code uses signed HttpOnly cookies, server-verified credentials, keyed credential hashes, and server-side role checks. Migration `202610100005_lock_direct_client_data_access.sql` is staged but unapplied. Do not merge/deploy until the required Netlify secrets are configured, the migration is tested against the actual schema in an isolated environment, and all negative authorization tests pass.
-2. **Database baseline:** no migration records were returned by the connected Supabase project. The included migrations are not a fresh-install schema. Capture and reconcile the actual schema before relying on a clean environment.
-3. **Migration verification:** CI now tests the additive migration files on minimal disposable PostgreSQL fixture tables, including reapplication/idempotency. This does **not** verify the complete production schema, Supabase-specific behavior, or the actual live project. The migrations remain unapplied to production; profile save behavior and review upsert behavior still need non-production end-to-end verification.
-4. **Contact number:** `CONTACT_WHATSAPP` is still the placeholder `254700000000`; confirm the correct contact number before release.
-5. **Storage:** candidate uploads are restricted to valid JPG/PNG/WEBP/GIF files no larger than 3 MB, with signature checks and server-side ownership checks. Verify uploads/deletions against isolated Supabase Storage; the live bucket policy has not been changed.
-6. **Runtime/end-to-end tests:** the server API and frontend have been wired together in the candidate, but syntax and fixture migration checks do not prove runtime behavior. Test login, owner editing, admin operations, bookings, reviews, uploads, analytics, profile refresh, QR destinations, mobile layouts, and SEO in an isolated environment.
-7. **NFC:** actual NFC tag programming and physical-device testing must be done outside the web app.
+These are meaningful automated checks, but they do not establish that the app works against the actual Supabase schema, that Supabase Storage behaves correctly after the lockdown, or that every end-to-end user journey passes.
 
-## Security and implementation work order
+## Mandatory release blockers
 
-See [`docs/security-implementation-plan.md`](security-implementation-plan.md) for the complete ordered plan, access-control requirements, functional test matrix, and release gates. The plan explicitly preserves the existing styling and keeps production changes blocked until the replacement authorization flows are verified.
+1. **Netlify secrets:** the server function needs `SUPABASE_SERVICE_ROLE_KEY`, `RTO_SESSION_SECRET`, and `RTO_ADMIN_PASSWORD` configured in Netlify's Functions environment. The session secret must remain stable because it also keys access-code hashes. Never commit these secrets or put them in browser code. The available connected Netlify tools do not provide a safe write operation for setting these secrets, so they have not been configured by this work.
+2. **Isolated Supabase verification:** no non-production Supabase project/branch is available. The five migrations remain unapplied to production. The database migration history is empty, so these are forward migrations, not a full fresh-install schema baseline.
+3. **Production schema compatibility:** verify all five migrations against a schema snapshot matching the actual project, including existing data duplicates before adding the review unique index.
+4. **Storage:** candidate uploads are limited to valid JPG/PNG/WEBP/GIF images no larger than 3 MB. Verify upload/delete behavior and public image delivery in isolated Supabase before applying the storage privilege changes.
+5. **End-to-end tests:** test admin login, business signup/edit/delete, owner-only edits, member signup/login/logout, review create/update/read, booking submission/status/history, image upload/delete, analytics, directory search, QR/share links, mobile layouts, and negative cross-business/member access.
+6. **Contact number:** `CONTACT_WHATSAPP` remains the placeholder `254700000000`; confirm the intended number.
+7. **NFC:** program physical tags and test tap/QR behavior on actual iOS and Android devices.
 
-## Verification record
+## Release decision
 
-- Source used: production `main` `index.html` at blob SHA `66a892c7c6b733dd6ded598e2686ac2fef0ae5bd`.
-- Visual CSS rules were extracted as-is; no redesign was requested or introduced.
-- The app remains a static frontend using the existing QRCodeJS CDN dependency; direct browser Supabase client access was removed.
-- Earlier CI run [#38067037973](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38067037973) passed for the earlier candidate. Subsequent API and migration work exposed a frontend syntax issue and a stale smoke assertion; the syntax issue was fixed and the assertion updated. The latest workflow must be confirmed passing before this candidate is considered verified. Fixture tests are not full application or production-schema tests.
-- No production database, production deployment, or `main` branch code was changed by the candidate work.
+**Do not merge or deploy this candidate to production yet.** The code and migration tests have advanced, but the required Netlify secrets and isolated end-to-end verification are not complete. Merging now would either break data access after the privilege-lockdown migration or leave production on the insecure legacy path.
+
+## Links
+
+- [Security and implementation work order](security-implementation-plan.md)
+- [Server function environment setup and limitations](../netlify/functions/README.md)
+- [Supabase migration notes](../supabase/README.md)
+- [Latest passing CI run](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38068272240)
