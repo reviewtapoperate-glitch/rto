@@ -67,7 +67,7 @@ async function hashCredential(value) {
 }
 async function supabaseRequest(path, method = "GET", body, prefer = "return=representation") {
   const url = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
-  const key = env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
+  const key = env("SUPABASE_SERVICE_ROLE_KEY");
   if (!key) throw new Error("Server authentication is not configured.");
   const response = await fetch(url + "/rest/v1/" + path, {
     method,
