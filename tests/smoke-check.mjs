@@ -33,6 +33,16 @@ assert.match(js, /rtoApi\("owner-login"/, "owner access code must be server-veri
 assert.match(js, /rtoApi\("member-login"/, "member access code must be server-verified");
 assert.match(api, /HttpOnly; Secure; SameSite=Lax/, "server sessions must use secure HttpOnly cookies");
 assert.match(api, /SUPABASE_SERVICE_ROLE_KEY/, "privileged database access must remain server-side");
+assert.doesNotMatch(js, /sb\.from\(/, "browser code must not query Supabase tables directly");
+assert.doesNotMatch(js, /sb\.storage/, "browser code must not mutate Storage directly");
+assert.match(api, /action === "customer-save"/, "business profile writes must pass through the API");
+assert.match(api, /action === "review-submit"/, "review writes must pass through the API");
+assert.match(api, /action === "booking-submit"/, "booking writes must pass through the API");
+assert.match(api, /action === "booking-status"/, "booking status changes must be authorized server-side");
+assert.match(api, /owner_code_hash/, "owner credentials must support hashed storage");
+assert.match(api, /access_code_hash/, "member credentials must support hashed storage");
+assert.match(api, /action === "upload-image"/, "image uploads must pass through validated server-side handling");
+assert.match(api, /action === "delete-image"/, "image deletion must be authorized server-side");
 assert.match(js, /submitBooking/, "booking flow must remain present");
 assert.match(js, /submitReview/, "review flow must remain present");
 assert.match(js, /subscribeToLiveUpdates/, "Realtime subscription code must remain present");
