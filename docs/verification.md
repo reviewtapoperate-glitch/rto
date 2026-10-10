@@ -22,7 +22,7 @@
 ## Security tests — test both allow and deny
 
 - [ ] Anonymous visitor can read only intended public business profile fields.
-- [ ] Anonymous visitor cannot list owner codes or member access codes.
+- [ ] Anonymous visitor cannot list owner codes or member access codes. Current source uses `customers.select("*")` and `members.select("*")`, while live SELECT policies are unconditional; treat this as a confirmed high-priority exposure to validate safely and remediate in staging.
 - [ ] Anonymous visitor cannot read private member details or other businesses' booking inboxes.
 - [ ] Anonymous visitor cannot update/delete customer profiles, reviews, bookings, or members unless a specific operation is intentionally permitted by an approved policy.
 - [ ] A member can access only their own account and bookings, and cannot impersonate another member by changing browser storage.
