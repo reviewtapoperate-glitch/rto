@@ -4,6 +4,7 @@ const env = {
   SUPABASE_URL: "https://rto-test.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
   RTO_SESSION_SECRET: "a-test-session-secret-that-is-longer-than-32-characters",
+  RTO_CREDENTIAL_PEPPER: "a-separate-test-credential-pepper-longer-than-32-characters",
   RTO_ADMIN_PASSWORD: "Test-Only-Admin-Password-2026!"
 };
 globalThis.Netlify = { env: { get: (key) => env[key] } };
