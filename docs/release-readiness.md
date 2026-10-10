@@ -11,7 +11,7 @@ Production remains on `main`. This branch is a review candidate, not a productio
 - Added server-verified admin, owner, and member sign-in; signed HttpOnly/Secure/SameSite=Lax cookies; role/slug authorization; one-time access-code generation; keyed access-code hashes; and legacy-code upgrade on successful login.
 - Added server-side image upload validation for JPG/PNG/WEBP/GIF, file signatures, a 3 MB size limit, and role/business path checks.
 - Added server-side guards that block privileged and write actions on non-production Netlify deploy contexts.
-- Added five forward SQL migrations for schedule/booking fields, address/map fields, review uniqueness/indexes, access-code hashes, and removal of broad direct client database/storage privileges.
+- Added an idempotent schema baseline and six forward SQL migrations for schedule/booking fields, address/map fields, review uniqueness/indexes, access-code hashes, direct client access lockdown, and Storage bucket limits.
 - Added structural checks, mocked API authentication tests, and PostgreSQL 17 migration/privilege smoke tests.
 
 ## Latest verification
@@ -21,7 +21,7 @@ GitHub Actions run [#38068272240](https://github.com/reviewtapoperate-glitch/rto
 - Netlify function syntax: passed.
 - Structural frontend checks: passed.
 - Mocked server API authentication checks: passed.
-- All five SQL migrations applied twice to a disposable PostgreSQL 17 fixture: passed.
+- All six forward migrations applied twice to a disposable PostgreSQL 17 fixture: passed. The clean-install baseline plus all six migrations is now also tested on a second disposable database.
 - Fixture assertions for RLS enablement and removal of direct client table privileges: passed.
 
 These are meaningful automated checks, but they do not establish that the app works against the actual Supabase schema, that Supabase Storage behaves correctly after the lockdown, or that every end-to-end user journey passes.
@@ -29,7 +29,7 @@ These are meaningful automated checks, but they do not establish that the app wo
 ## Mandatory release blockers
 
 1. **Netlify secrets:** the server function needs `SUPABASE_SERVICE_ROLE_KEY`, `RTO_SESSION_SECRET`, and `RTO_ADMIN_PASSWORD` configured in Netlify's Functions environment. The session secret must remain stable because it also keys access-code hashes. Never commit these secrets or put them in browser code. The available connected Netlify tools do not provide a safe write operation for setting these secrets, so they have not been configured by this work.
-2. **Isolated Supabase verification:** no non-production Supabase project/branch is available. The five migrations remain unapplied to production. The database migration history is empty, so these are forward migrations, not a full fresh-install schema baseline.
+2. **Isolated Supabase verification:** no non-production Supabase project/branch is available. The baseline and six forward migrations remain unapplied to production. The database migration history is empty, so these are forward migrations, not a full fresh-install schema baseline.
 3. **Production schema compatibility:** verify all five migrations against a schema snapshot matching the actual project, including existing data duplicates before adding the review unique index.
 4. **Storage:** candidate uploads are limited to valid JPG/PNG/WEBP/GIF images no larger than 3 MB. Verify upload/delete behavior and public image delivery in isolated Supabase before applying the storage privilege changes.
 5. **End-to-end tests:** test admin login, business signup/edit/delete, owner-only edits, member signup/login/logout, review create/update/read, booking submission/status/history, image upload/delete, analytics, directory search, QR/share links, mobile layouts, and negative cross-business/member access.
