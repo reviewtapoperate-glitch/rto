@@ -394,9 +394,10 @@ export async function handleRtoApi(request, context) {
       const baseUrl = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
       const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
       if (!serviceKey) return json({ error: "Server storage is not configured." }, 503);
-      const response = await fetch(baseUrl + "/storage/v1/object/rto-photos/" + parts.map(encodeURIComponent).join("/"), {
+      const response = await fetch(baseUrl + "/storage/v1/object/rto-photos", {
         method: "DELETE",
-        headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey }
+        headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey, "content-type": "application/json" },
+        body: JSON.stringify({ prefixes: [parts.slice(1).join("/")] })
       });
       if (!response.ok) return json({ error: "Image deletion failed." }, 400);
       return json({ ok: true });
