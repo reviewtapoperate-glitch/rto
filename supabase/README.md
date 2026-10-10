@@ -21,3 +21,9 @@ Do not point a fresh Supabase project at this migrations directory and assume it
 - `202610100002_add_customer_address_maps.sql`: adds the two customer profile fields currently used by the frontend but absent from the observed live schema.
 
 Neither migration has been applied to the connected production project by this change.
+
+## Free CI migration smoke test
+
+GitHub Actions runs `tests/sql/migration-smoke.sh` against a disposable PostgreSQL 17 service container. The script creates only minimal `customers` and `bookings` fixture tables, applies both additive migrations, reapplies them to check idempotency, and asserts expected columns/types/nullability/defaults.
+
+**Scope limitation:** this is a migration syntax/contract smoke test, not a copy of the RTO production schema. It does not test Supabase Auth, Storage, RLS policies, grants, production constraints, or application end-to-end behavior. The fixture must not be mistaken for the missing full database baseline.
