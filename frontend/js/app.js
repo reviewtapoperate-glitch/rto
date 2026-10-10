@@ -829,21 +829,20 @@ function renderLoginForm(){
 }
 async function doLogin(){
   if (blockPreviewWrite("Owner sign-in is disabled in the verification preview.")) return;
-
   const code = document.getElementById("li_code").value.trim().toUpperCase();
   if (!code) { toast("Enter your access code"); return; }
-
   const btn = document.getElementById("liBtn");
   btn.textContent = "Checking…"; btn.disabled = true;
-  const { data, error } = await sb.from("customers").select("*").eq("owner_code", code).maybeSingle();
-  btn.textContent = "Log in"; btn.disabled = false;
-
-  if (error || !data) { toast("That access code doesn't match any account"); return; }
-
-  currentMode = "owner";
-  renderOwnerEditor(data);
+  try {
+    const result = await rtoApi("owner-login-by-code", { code });
+    btn.textContent = "Log in"; btn.disabled = false;
+    currentMode = "owner";
+    renderOwnerEditor(result.customer);
+  } catch (error) {
+    btn.textContent = "Log in"; btn.disabled = false;
+    toast(error.message || "That access code doesn't match any account.");
+  }
 }
-
 /* ============================================================
    PUBLIC DIRECTORY — search by name, business type, or menu item.
    Only businesses with listed_in_directory = true appear here.
