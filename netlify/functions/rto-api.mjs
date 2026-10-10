@@ -124,7 +124,8 @@ export default async (request, context) => {
       });
       const row = Array.isArray(rows) ? rows[0] : null;
       if (!row) return json({ error: "Business page could not be created." }, 500);
-      return json({ ok: true, customer: { ...safeOwnerRecord(row), owner_code: code } }, 201);
+      const token = await makeSession({ role: "owner", slug: row.slug }, sessionSecret);
+      return json({ ok: true, customer: { ...safeOwnerRecord(row), owner_code: code } }, 201, { "set-cookie": sessionCookie(token) });
     }
     if (action === "admin-owner-code") {
       const session = await readSession(request, sessionSecret);
@@ -145,6 +146,22 @@ export default async (request, context) => {
       const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
       return row ? json({ customer: safeOwnerRecord(row) }) : json({ error: "Business link not found." }, 404);
+    }
+    if (action === "owner-login-by-code") {
+      const code = String(body?.code || "").trim().toUpperCase();
+      if (!code) return json({ error: "Enter your access code." }, 400);
+      const submittedHash = await hashCredential(code, sessionSecret);
+      const rows = await supabaseRequest("customers?select=*&or=(owner_code_hash.not.is.null,owner_code.not.is.null)&limit=1000");
+      let row = Array.isArray(rows) ? rows.find(item =>
+        (item.owner_code_hash && constantTimeEqual(String(item.owner_code_hash), submittedHash)) ||
+        (item.owner_code && constantTimeEqual(String(item.owner_code).toUpperCase(), code))
+      ) : null;
+      if (!row) return json({ error: "That access code doesn't match any account." }, 401);
+      if (row.owner_code && !row.owner_code_hash) {
+        await supabaseRequest("customers?slug=eq." + encodeURIComponent(row.slug), "PATCH", { owner_code_hash: submittedHash, owner_code: null });
+      }
+      const token = await makeSession({ role: "owner", slug: row.slug }, sessionSecret);
+      return json({ ok: true, customer: safeOwnerRecord(row) }, 200, { "set-cookie": sessionCookie(token) });
     }
     if (action === "owner-login") {
       const slug = String(body?.slug || "").trim().toLowerCase();
