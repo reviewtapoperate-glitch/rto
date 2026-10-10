@@ -14,7 +14,6 @@ function renderPreviewAccessNotice(message) {
 
 const configured = true; // database access is server-side through Netlify Functions
 const libsLoaded = typeof QRCode !== "undefined";
-const sb = null;
 const BUCKET = "rto-photos";
 
 const app = document.getElementById("app");
@@ -984,7 +983,7 @@ function renderSetupNeeded(){
       <div class="wrap" style="max-width:420px;">
         <div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
         <div class="setup-warning">
-          <b>Setup needed.</b> Find SUPABASE_URL and SUPABASE_ANON_KEY near the top of the script and paste in your real values.
+          <b>Setup needed.</b> Configure the required server-only Netlify Function environment variables before enabling the application.
         </div>
       </div>
     </div>`;
