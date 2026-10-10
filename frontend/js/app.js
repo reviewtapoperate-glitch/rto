@@ -309,7 +309,7 @@ async function submitBooking(slugValue, businessName, guidelinesRequired){
   toast("Request sent!");
 
   const waText = `Hi, I'd like to request: ${item || "a booking"}${date ? " on " + date : ""}${time ? " at " + time : ""}. Name: ${name}${note ? ". Note: " + note : ""}`;
-  const { data: bizRow } = await sb.from("customers").select("whatsapp_number").eq("slug", slugValue).maybeSingle();
+  const bizRow = (await rtoApi("public-customer", { slug: slugValue })).customer;
   if (bizRow && bizRow.whatsapp_number) {
     window.open(`https://wa.me/${digits(bizRow.whatsapp_number)}?text=${encodeURIComponent(waText)}`, "_blank");
   }
@@ -1095,7 +1095,8 @@ async function deleteCustomer(s){
     if (c.background_url) await deleteFromStorage(c.background_url);
     if (c.menu_image_url) await deleteFromStorage(c.menu_image_url);
   }
-  const { error } = await sb.from("customers").delete().eq("slug", s);
+  let error = null;
+  try { await rtoApi("customer-delete", { slug: s }); } catch (e) { error = e; }
   if (error) toast("Couldn't delete: " + error.message);
   else { toast("Deleted"); loadCustomerList(); }
 }
@@ -1528,7 +1529,8 @@ async function saveCustomer(){
   else if (removeFlags.menu) record.menu_image_url = null;
 
   const wasEditing = !!editingSlug;
-  const { error } = await sb.from("customers").upsert(record, { onConflict: "slug" });
+  let error = null;
+  try { await rtoApi("customer-save", { record }); } catch (e) { error = e; }
   btn.textContent = wasEditing ? "Save changes" : "Save & publish"; btn.disabled = false;
 
   if (error) { toast("Couldn't save: " + error.message); return; }
