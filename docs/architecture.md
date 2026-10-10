@@ -142,6 +142,12 @@ This is not the current repository tree. Do not move files or change Netlify's p
 - Visual redesign, changing colors/layout/typography/themes, changing public URL formats, removing existing features, replacing the static app with a framework, changing NFC hardware behavior, deleting production data, or applying production SQL/policy changes without a reviewed migration plan.
 
 
+## Candidate branch status — 2026-10-10
+
+The `production-ready-candidate` branch now extracts the production entrypoint into `frontend/index.html`, `frontend/css/styles.css`, and `frontend/js/app.js`. The CSS rules and browser JavaScript were copied from the recorded production source blob without intentional logic changes. `netlify.toml` points the deploy publish directory to `frontend`. This is a structural candidate; it does not resolve the documented authorization issues and has not been certified by browser end-to-end tests.
+
+The candidate adds Node-based static smoke checks and a GitHub Actions workflow, plus two staged additive SQL migrations. No SQL has been applied to Supabase. The full live schema baseline is still required before a fresh Supabase environment can be reproduced.
+
 ## Latest read-only live verification — 2026-10-10
 
 This section supersedes earlier findings where the live evidence differs. The audit queried the connected GitHub repository, Netlify project, and Supabase project. No app code, database schema/data, policy, storage setting, or production deployment was changed.
