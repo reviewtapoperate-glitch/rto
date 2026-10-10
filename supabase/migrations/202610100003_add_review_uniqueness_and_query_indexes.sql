@@ -15,8 +15,21 @@ BEGIN
   END IF;
 END $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS reviews_business_slug_member_id_uidx
-  ON public.reviews (business_slug, member_id);
+DO $
+BEGIN
+  -- The live schema may already have a unique constraint under another name.
+  -- Avoid creating a redundant second unique index when the key already exists.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename = 'reviews'
+      AND indexdef ILIKE 'CREATE UNIQUE INDEX% (business_slug, member_id)%'
+  ) THEN
+    CREATE UNIQUE INDEX reviews_business_slug_member_id_uidx
+      ON public.reviews (business_slug, member_id);
+  END IF;
+END $;
 
 CREATE INDEX IF NOT EXISTS bookings_business_slug_idx
   ON public.bookings (business_slug);
