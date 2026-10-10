@@ -22,7 +22,9 @@ const slug = params.get("c");
 const editSlug = params.get("edit");
 
 async function rtoApi(action, payload = {}) {
-  const response = await fetch("/.netlify/functions/rto-api", {
+  const authActions = new Set(["admin-login", "owner-login", "owner-login-by-code", "member-signup", "member-login", "business-signup", "admin-owner-code", "session", "logout"]);
+  const endpoint = authActions.has(action) ? "/.netlify/functions/rto-auth" : "/.netlify/functions/rto-api";
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "same-origin",
