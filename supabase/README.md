@@ -24,6 +24,7 @@ Before any database release:
 - `202610100005_lock_direct_client_data_access.sql`: removes broad direct client table grants/policies and direct Storage mutations. This migration depends on the matching server API being configured and deployed.
 - `202610100006_rto_storage_limits.sql`: sets the public image bucket's allowed MIME types and 3 MB file-size limit.
 - `202610100007_repair_bigint_id_generation.sql`: adds missing sequence-backed ID defaults to existing `reviews`, `bookings`, and `page_events` tables without changing fresh-install identity columns.
+- `202610100007_repair_bigint_id_generation.sql`: adds missing sequence-backed ID defaults to existing `reviews`, `bookings`, and `page_events` tables without changing fresh-install identity columns.
 
 None of these migrations has been applied to the connected production project by this candidate work. Migration 005 deliberately removes direct client data access; do not apply it to production before the server-only API is configured and tested.
 
