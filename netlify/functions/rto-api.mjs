@@ -145,7 +145,7 @@ export async function handleRtoApi(request, context) {
       const row = Array.isArray(rows) ? rows[0] : null;
       if (!row) return json({ error: "Business page not found." }, 404);
       const code = randomAccessCode();
-      const codeHash = await hashCredential(code, sessionSecret);
+      const codeHash = await hashCredential(code);
       await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "PATCH", { owner_code: null, owner_code_hash: codeHash });
       return json({ ok: true, code });
     }
@@ -159,7 +159,7 @@ export async function handleRtoApi(request, context) {
     if (action === "owner-login-by-code") {
       const code = String(body?.code || "").trim().toUpperCase();
       if (!code) return json({ error: "Enter your access code." }, 400);
-      const submittedHash = await hashCredential(code, sessionSecret);
+      const submittedHash = await hashCredential(code);
       const rows = await supabaseRequest("customers?select=*&or=(owner_code_hash.not.is.null,owner_code.not.is.null)&limit=1000");
       let row = Array.isArray(rows) ? rows.find(item =>
         item.owner_code_hash
@@ -179,7 +179,7 @@ export async function handleRtoApi(request, context) {
       if (!/^[a-z0-9-]{1,80}$/.test(slug) || !code) return json({ error: "Enter a valid link and access code." }, 400);
       const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
-      const submittedHash = await hashCredential(code, sessionSecret);
+      const submittedHash = await hashCredential(code);
       const hasHash = Boolean(row?.owner_code_hash);
       const hashValid = hasHash && constantTimeEqual(String(row.owner_code_hash), submittedHash);
       const legacyValid = !hasHash && row?.owner_code && constantTimeEqual(String(row.owner_code).toUpperCase(), code);
@@ -195,7 +195,7 @@ export async function handleRtoApi(request, context) {
       const phone = normalizePhone(body?.phone);
       if (name.length < 2 || phone.length < 7 || phone.length > 20) return json({ error: "Enter a valid name and phone number." }, 400);
       const code = randomAccessCode();
-      const codeHash = await hashCredential(code, sessionSecret);
+      const codeHash = await hashCredential(code);
       const rows = await supabaseRequest("members", "POST", { name, phone, access_code: null, access_code_hash: codeHash });
       const row = Array.isArray(rows) ? rows[0] : null;
       if (!row) return json({ error: "Account could not be created." }, 500);
@@ -209,7 +209,7 @@ export async function handleRtoApi(request, context) {
       if (phone.length < 7 || !code) return json({ error: "Enter your phone and access code." }, 400);
       const rows = await supabaseRequest("members?select=id,name,phone,access_code,access_code_hash&phone=eq." + encodeURIComponent(phone) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
-      const submittedHash = await hashCredential(code, sessionSecret);
+      const submittedHash = await hashCredential(code);
       const hasHash = Boolean(row?.access_code_hash);
       const hashValid = hasHash && constantTimeEqual(String(row.access_code_hash), submittedHash);
       const legacyValid = !hasHash && row?.access_code && constantTimeEqual(String(row.access_code).toUpperCase(), code);
