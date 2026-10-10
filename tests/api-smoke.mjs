@@ -19,6 +19,9 @@ const customer = {
   listed_in_directory: true
 };
 const members = [];
+const reviews = [];
+const bookings = [];
+const events = [];
 const calls = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(String(input));
@@ -41,6 +44,24 @@ globalThis.fetch = async (input, init = {}) => {
     Object.assign(customer, created);
     return Response.json([created], { status: 201 });
   }
+  if (url.pathname.startsWith("/storage/v1/object/") && ["POST", "DELETE"].includes(method)) return Response.json({ ok: true });
+  if (url.pathname === "/rest/v1/reviews" && method === "POST") { const row = { id: reviews.length + 1, ...body }; reviews.push(row); return Response.json([row], { status: 201 }); }
+  if (url.pathname === "/rest/v1/reviews" && method === "GET") return Response.json(reviews);
+  if (url.pathname === "/rest/v1/bookings" && method === "POST") { const row = { id: bookings.length + 1, ...body }; bookings.push(row); return Response.json([row], { status: 201 }); }
+  if (url.pathname === "/rest/v1/bookings" && method === "GET") {
+    const id = url.searchParams.get("id")?.replace("eq.", "");
+    const memberId = url.searchParams.get("member_id")?.replace("eq.", "");
+    return Response.json(bookings.filter(row => (!id || String(row.id) === id) && (!memberId || row.member_id === memberId)));
+  }
+  if (url.pathname === "/rest/v1/bookings" && method === "PATCH") {
+    const id = url.searchParams.get("id")?.replace("eq.", "");
+    const row = bookings.find(item => String(item.id) === id);
+    if (row) Object.assign(row, body);
+    return Response.json(row ? [row] : []);
+  }
+  if (url.pathname === "/rest/v1/bookings" && method === "DELETE") return Response.json([]);
+  if (url.pathname === "/rest/v1/page_events" && method === "POST") { const row = { id: events.length + 1, ...body }; events.push(row); return Response.json([row], { status: 201 }); }
+  if (url.pathname === "/rest/v1/page_events" && method === "GET") return Response.json(events);
   if (url.pathname === "/rest/v1/members" && method === "POST") {
     const created = { id: "member-test-id", ...body, created_at: "2026-01-01T00:00:00Z" };
     members.push(created);
@@ -56,6 +77,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 
 const { default: handler } = await import("../netlify/functions/rto-api.mjs");
+const { default: authHandler } = await import("../netlify/functions/rto-auth.mjs");
 const production = { deploy: { context: "production" } };
 const preview = { deploy: { context: "deploy-preview" } };
 async function call(action, payload = {}, cookie, context = production) {
@@ -84,6 +106,10 @@ const adminCookie = sessionCookie(adminLogin);
 assert.match(adminLogin.headers.get("set-cookie"), /HttpOnly; Secure; SameSite=Lax/);
 const adminSession = await call("session", {}, adminCookie);
 assert.equal((await adminSession.json()).session.role, "admin");
+const adminSave = await call("customer-save", { record: { slug: "demo", name: "Updated Demo", business_type: "Cafe" } }, adminCookie);
+assert.equal(adminSave.status, 200, "authenticated admin should be able to save a business");
+const authWrapperRejectsData = await authHandler(new Request("https://rto-test.netlify.app/.netlify/functions/rto-auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "customer-save" }) }), production);
+assert.equal(authWrapperRejectsData.status, 404, "auth wrapper must reject non-authentication actions");
 
 const publicProfile = await call("public-customer", { slug: "demo" });
 assert.equal(publicProfile.status, 200);
@@ -114,5 +140,19 @@ const memberLogin = await call("member-login", { phone: "254711111111", code: si
 assert.equal(memberLogin.status, 200, "hashed member access code should authenticate");
 const memberSession = await call("session", {}, memberCookie);
 assert.equal((await memberSession.json()).session.role, "member");
+const reviewSubmit = await call("review-submit", { slug: "demo", rating: 5, comment: "Test review" }, memberCookie);
+assert.equal(reviewSubmit.status, 200, "signed-in member should submit a review through the API");
+const bookingSubmit = await call("booking-submit", { slug: "demo", name: "Booking Guest", phone: "254722222222", item: "Table", date: "2026-10-15", time: "18:00", note: "Test" });
+assert.equal(bookingSubmit.status, 201, "public visitor should submit a validated booking");
+const booking = bookings[0];
+const ownerBookingList = await call("bookings-list", { slug: "demo" }, ownerCookie);
+assert.equal(ownerBookingList.status, 200, "owner should only access bookings for their business");
+const bookingStatus = await call("booking-status", { id: booking.id, status: "confirmed" }, ownerCookie);
+assert.equal(bookingStatus.status, 200, "owner should update their own booking status");
+const upload = await call("upload-image", { slug: "demo", tag: "photo", filename: "test.png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" }, ownerCookie);
+assert.equal(upload.status, 201, "authorized owner should upload a valid image");
+const uploadedPath = (await upload.json()).path;
+const deleteImage = await call("delete-image", { slug: "demo", path: uploadedPath }, ownerCookie);
+assert.equal(deleteImage.status, 200, "owner should delete images under their own business path");
 
-console.log("RTO API auth smoke tests passed (mocked Supabase; no live database used).");
+console.log("RTO API smoke tests passed (mocked Supabase; no live database used).");
