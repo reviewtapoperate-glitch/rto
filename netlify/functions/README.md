@@ -6,7 +6,7 @@ The `rto-auth` Netlify Function routes admin, owner-code, and member sign-in thr
 
 Configure these in the Netlify UI for the **candidate deploy context first**. Do not put any of these secrets in frontend files, GitHub source, `netlify.toml`, or a public `VITE_`/`NEXT_PUBLIC_` variable.
 
-- `SUPABASE_SERVICE_ROLE_KEY`: the service-role secret for the RTO Supabase project. This is highly privileged and must only be available to Netlify Functions.
+- `SUPABASE_SECRET_KEY` (preferred) or `SUPABASE_SERVICE_ROLE_KEY` (legacy compatibility): the server-only elevated key for the RTO Supabase project. This is highly privileged and must only be available to Netlify Functions. If both are set, `SUPABASE_SECRET_KEY` takes precedence.
 - `RTO_SESSION_SECRET`: a cryptographically random secret of at least 32 characters used to sign session cookies and key credential hashes. Keep it stable; changing it invalidates sessions and hashes for credentials already upgraded.
 - `RTO_ADMIN_PASSWORD`: the replacement admin passcode, at least 16 characters. It is stored as a Netlify secret, not in browser code.
 - `SUPABASE_URL`: optional override; defaults to the existing RTO Supabase project URL.
