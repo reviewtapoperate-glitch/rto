@@ -352,9 +352,16 @@ export default async (request, context) => {
       const binary = atob(match[2]);
       if (binary.length > 3 * 1024 * 1024) return json({ error: "Images must be 3 MB or smaller." }, 413);
       const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+      const signatureOk = match[1] === "image/png"
+        ? bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((v, i) => bytes[i] === v)
+        : match[1] === "image/jpeg" ? bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+        : match[1] === "image/gif" ? bytes.length >= 6 && String.fromCharCode(...bytes.slice(0, 6)).startsWith("GIF8")
+        : bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+      if (!signatureOk) return json({ error: "The selected file is not a valid image of the declared type." }, 400);
       const path = slug + "/" + tag + "-" + Date.now() + "-" + filename;
       const baseUrl = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
       const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+      if (!serviceKey) return json({ error: "Server storage is not configured." }, 503);
       const response = await fetch(baseUrl + "/storage/v1/object/rto-photos/" + path.split("/").map(encodeURIComponent).join("/"), {
         method: "POST",
         headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey, "content-type": match[1], "x-upsert": "true" },
@@ -370,10 +377,10 @@ export default async (request, context) => {
       if (!session || !["admin", "owner"].includes(session.role) || parts.length < 2 || parts.some(p => !p || p === "." || p === "..") || !/^[a-z0-9-]{1,80}$/.test(parts[0]) || (session.role === "owner" && session.slug !== parts[0])) return json({ error: "Not authorized to delete this image." }, 403);
       const baseUrl = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
       const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+      if (!serviceKey) return json({ error: "Server storage is not configured." }, 503);
       const response = await fetch(baseUrl + "/storage/v1/object/rto-photos/" + parts.map(encodeURIComponent).join("/"), {
         method: "DELETE",
-        headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey, "content-type": "application/json" },
-        body: JSON.stringify({ prefixes: [parts.slice(1).join("/")] })
+        headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey }
       });
       if (!response.ok) return json({ error: "Image deletion failed." }, 400);
       return json({ ok: true });
