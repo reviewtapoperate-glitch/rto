@@ -4,7 +4,8 @@ const env = {
   SUPABASE_URL: "https://rto-test.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
   RTO_SESSION_SECRET: "a-test-session-secret-that-is-longer-than-32-characters",
-  RTO_ADMIN_PASSWORD: "Test-Only-Admin-Password-2026!"
+  RTO_ADMIN_PASSWORD: "Test-Only-Admin-Password-2026!",
+  RTO_DEBUG_ERRORS: "true"
 };
 globalThis.Netlify = { env: { get: (key) => env[key] } };
 
@@ -150,7 +151,8 @@ assert.equal(ownerBookingList.status, 200, "owner should only access bookings fo
 const bookingStatus = await call("booking-status", { id: booking.id, status: "confirmed" }, ownerCookie);
 assert.equal(bookingStatus.status, 200, "owner should update their own booking status");
 const upload = await call("upload-image", { slug: "demo", tag: "photo", filename: "test.png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" }, ownerCookie);
-console.log("Upload mock trace:", upload.status, calls.slice(-2));
+const uploadResult = await upload.json();
+console.log("Upload diagnostic:", upload.status, uploadResult, calls.slice(-2));
 assert.equal(upload.status, 201, "authorized owner should upload a valid image");
 const uploadedPath = (await upload.json()).path;
 const deleteImage = await call("delete-image", { slug: "demo", path: uploadedPath }, ownerCookie);
