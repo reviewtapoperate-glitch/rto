@@ -16,7 +16,8 @@ assert.match(toml, /publish\s*=\s*"frontend"/, "Netlify must publish the fronten
 assert.match(html, /href=["']\/css\/styles\.css["']/, "HTML must reference the extracted stylesheet");
 assert.match(html, /src=["']\/js\/app\.js["']/, "HTML must reference the extracted app script");
 assert.doesNotMatch(html, /<style\b/i, "styles must not remain inline");
-assert.doesNotMatch(html, /<script\b(?![^>]*\bsrc\s*=)[^>]*>/i, "application scripts must not remain inline");
+const scriptTags = [...html.matchAll(/<script\b([^>]*)>/gi)];
+assert(scriptTags.every((match) => /\bsrc\s*=/.test(match[1])), "all scripts must be external files");
 assert.match(css, /--pink\s*:\s*#FF2E88/i, "existing TapCore pink token must be preserved");
 assert.match(css, /--cyan\s*:\s*#00E5FF/i, "existing signal cyan token must be preserved");
 assert.match(js, /SUPABASE_URL/, "Supabase configuration must remain present");
