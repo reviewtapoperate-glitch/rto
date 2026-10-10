@@ -774,29 +774,22 @@ async function resolveUniqueSlug(base){
 }
 async function doSignup(){
   if (blockPreviewWrite("Creating business pages is disabled in the verification preview.")) return;
-
   const name = document.getElementById("su_name").value.trim();
   const bizType = document.getElementById("su_biztype").value;
   const phone = document.getElementById("su_phone").value.trim();
-
   if (!name || !bizType || !phone) { toast("Please fill in every field"); return; }
-
   const btn = document.getElementById("suBtn");
   btn.textContent = "Creating…"; btn.disabled = true;
-
-  const baseSlug = slugify(name);
-  const finalSlug = await resolveUniqueSlug(baseSlug);
-  const code = generateOwnerCode();
-
-  const record = {
-    slug: finalSlug, name, business_type: bizType, phone, owner_code: code,
-    portfolio: [], menu_items: [], social_links: [], portfolio_title: "Recent work", theme: "neon",
-  };
-  const { error } = await sb.from("customers").insert(record);
-  btn.textContent = "Create my account"; btn.disabled = false;
-
-  if (error) { toast("Couldn't create your account: " + error.message); return; }
-  renderSignupSuccess(record);
+  try {
+    const baseSlug = slugify(name);
+    const finalSlug = await resolveUniqueSlug(baseSlug);
+    const result = await rtoApi("business-signup", { name, businessType: bizType, phone, slug: finalSlug });
+    btn.textContent = "Create my account"; btn.disabled = false;
+    renderSignupSuccess(result.customer);
+  } catch (error) {
+    btn.textContent = "Create my account"; btn.disabled = false;
+    toast(error.message || "Couldn't create your account.");
+  }
 }
 function renderSignupSuccess(record){
   window.__pendingSignupRecord = record;
@@ -1776,17 +1769,12 @@ function closeQr(){ const m = document.getElementById("qrModal"); if (m) m.remov
 /* ---- Owner access modal ---- */
 async function showOwnerAccessModal(slug){
   if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
-
-  let c = __rtoCustomers.find(x => x.slug === slug);
+  const c = __rtoCustomers.find(x => x.slug === slug);
   if (!c) { toast("Couldn't find that customer"); return; }
-
-  if (!c.owner_code) {
-    const code = generateOwnerCode();
-    const { error } = await sb.from("customers").update({ owner_code: code }).eq("slug", slug);
-    if (error) { toast("Couldn't set up owner access: " + error.message); return; }
-    c.owner_code = code;
-  }
-  renderOwnerAccessModal(c);
+  try {
+    const result = await rtoApi("admin-owner-code", { slug });
+    renderOwnerAccessModal({ ...c, owner_code: result.code });
+  } catch (error) { toast(error.message || "Couldn't issue a new owner access code."); }
 }
 function renderOwnerAccessModal(c){
   const old = document.getElementById("ownerModal");
@@ -1813,15 +1801,14 @@ function renderOwnerAccessModal(c){
 }
 async function regenerateOwnerCode(slug){
   if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
-
   if (!confirm("This makes their old code stop working immediately. Continue?")) return;
-  const code = generateOwnerCode();
-  const { error } = await sb.from("customers").update({ owner_code: code }).eq("slug", slug);
-  if (error) { toast("Couldn't regenerate: " + error.message); return; }
-  const c = __rtoCustomers.find(x => x.slug === slug);
-  if (c) c.owner_code = code;
-  toast("New code generated");
-  renderOwnerAccessModal(c);
+  try {
+    const result = await rtoApi("admin-owner-code", { slug });
+    const c = __rtoCustomers.find(x => x.slug === slug);
+    if (!c) { toast("Couldn't find that customer"); return; }
+    toast("New code generated");
+    renderOwnerAccessModal({ ...c, owner_code: result.code });
+  } catch (error) { toast(error.message || "Couldn't regenerate the code."); }
 }
 function closeOwnerModal(){ const m = document.getElementById("ownerModal"); if (m) m.remove(); }
 
