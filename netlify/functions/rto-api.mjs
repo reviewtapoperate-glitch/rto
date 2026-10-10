@@ -411,6 +411,7 @@ export async function handleRtoApi(request, context) {
     const message = String(error?.message || "");
     if (message.toLowerCase().includes("duplicate key") || message.toLowerCase().includes("unique constraint")) return json({ error: "That phone is already registered — try logging in instead." }, 409);
     if (message.includes("Server authentication is not configured.")) return json({ error: message }, 503);
+    if (env("RTO_DEBUG_ERRORS") === "true") return json({ error: message || "Unknown error." }, 500);
     return json({ error: "The request could not be completed. Check the server configuration and try again." }, 500);
   }
 }
