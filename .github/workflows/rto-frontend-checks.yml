@@ -1,0 +1,26 @@
+name: RTO frontend checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - production-ready-candidate
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check browser JavaScript syntax
+        run: node --check frontend/js/app.js
+      - name: Run structural smoke checks
+        run: node tests/smoke-check.mjs
