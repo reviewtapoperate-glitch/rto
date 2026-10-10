@@ -286,7 +286,7 @@ export default async (request, context) => {
       const rating = Number(body?.rating);
       const comment = String(body?.comment || "").trim().slice(0, 2000);
       if (!/^[a-z0-9-]{1,80}$/.test(slug) || !Number.isInteger(rating) || rating < 1 || rating > 5) return json({ error: "Choose a rating from 1 to 5." }, 400);
-      const memberRows = await supabaseRequest("members?select=id,name& id=eq." + encodeURIComponent(session.member.id) + "&limit=1");
+      const memberRows = await supabaseRequest("members?select=id,name&id=eq." + encodeURIComponent(session.member.id) + "&limit=1");
       const member = Array.isArray(memberRows) ? memberRows[0] : null;
       if (!member) return json({ error: "Member session is no longer valid. Please sign in again." }, 401);
       const rows = await supabaseRequest("reviews?on_conflict=business_slug,member_id", "POST", { business_slug: slug, member_id: member.id, member_name: member.name, rating, comment }, "resolution=merge-duplicates,return=representation");
@@ -338,6 +338,45 @@ export default async (request, context) => {
       if (!session || !["admin", "owner"].includes(session.role) || !/^[a-z0-9-]{1,80}$/.test(slug) || (session.role === "owner" && session.slug !== slug)) return json({ error: "Not authorized to view analytics." }, 403);
       const rows = await supabaseRequest("page_events?select=event_type,link_label&slug=eq." + encodeURIComponent(slug) + "&limit=5000");
       return json({ events: Array.isArray(rows) ? rows : [] });
+    }
+    if (action === "upload-image") {
+      const session = await readSession(request, sessionSecret);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      const tag = String(body?.tag || "").trim().toLowerCase();
+      const filename = String(body?.filename || "image").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
+      const dataUrl = String(body?.dataUrl || "");
+      if (!session || !["admin", "owner"].includes(session.role) || !/^[a-z0-9-]{1,80}$/.test(slug) || (session.role === "owner" && session.slug !== slug)) return json({ error: "Not authorized to upload to this business." }, 403);
+      if (!/^[a-z0-9-]{1,40}$/.test(tag)) return json({ error: "Invalid image category." }, 400);
+      const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+      if (!match) return json({ error: "Use a JPG, PNG, WEBP, or GIF image." }, 400);
+      const binary = atob(match[2]);
+      if (binary.length > 3 * 1024 * 1024) return json({ error: "Images must be 3 MB or smaller." }, 413);
+      const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+      const path = slug + "/" + tag + "-" + Date.now() + "-" + filename;
+      const baseUrl = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
+      const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+      const response = await fetch(baseUrl + "/storage/v1/object/rto-photos/" + path.split("/").map(encodeURIComponent).join("/"), {
+        method: "POST",
+        headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey, "content-type": match[1], "x-upsert": "true" },
+        body: bytes
+      });
+      if (!response.ok) return json({ error: "Image upload failed. Check file size and storage configuration." }, 400);
+      return json({ ok: true, path, publicUrl: baseUrl + "/storage/v1/object/public/rto-photos/" + path.split("/").map(encodeURIComponent).join("/") }, 201);
+    }
+    if (action === "delete-image") {
+      const session = await readSession(request, sessionSecret);
+      const path = String(body?.path || "");
+      const parts = path.split("/");
+      if (!session || !["admin", "owner"].includes(session.role) || parts.length < 2 || parts.some(p => !p || p === "." || p === "..") || !/^[a-z0-9-]{1,80}$/.test(parts[0]) || (session.role === "owner" && session.slug !== parts[0])) return json({ error: "Not authorized to delete this image." }, 403);
+      const baseUrl = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
+      const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+      const response = await fetch(baseUrl + "/storage/v1/object/rto-photos/" + parts.map(encodeURIComponent).join("/"), {
+        method: "DELETE",
+        headers: { apikey: serviceKey, authorization: "Bearer " + serviceKey, "content-type": "application/json" },
+        body: JSON.stringify({ prefixes: [parts.slice(1).join("/")] })
+      });
+      if (!response.ok) return json({ error: "Image deletion failed." }, 400);
+      return json({ ok: true });
     }
     if (action === "event-log") {
       const slug = String(body?.slug || "").trim().toLowerCase();
