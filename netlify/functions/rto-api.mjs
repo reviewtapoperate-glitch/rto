@@ -314,8 +314,8 @@ export async function handleRtoApi(request, context) {
       const note = String(body?.note || "").trim().slice(0, 2000);
       const guidelinesAccepted = body?.guidelinesAccepted === true;
       if (!/^[a-z0-9-]{1,80}$/.test(slug) || name.length < 2 || phone.length < 7) return json({ error: "Enter your name and a valid phone number." }, 400);
-      if (date && !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return json({ error: "Choose a valid booking date." }, 400);
-      if (time && !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) return json({ error: "Choose a valid booking time." }, 400);
+      if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ error: "Choose a valid booking date." }, 400);
+      if (time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return json({ error: "Choose a valid booking time." }, 400);
       const biz = await supabaseRequest("customers?select=slug,booking_guidelines&slug=eq." + encodeURIComponent(slug) + "&limit=1");
       if (!Array.isArray(biz) || !biz.length) return json({ error: "Business page not found." }, 404);
       if (String(biz[0].booking_guidelines || "").trim() && !guidelinesAccepted) return json({ error: "Please confirm the booking guidelines before submitting." }, 400);
