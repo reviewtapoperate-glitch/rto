@@ -4,10 +4,10 @@ Project ref: `ptmznpjsgdkasvywufcx`.
 
 ## Important: migration history is not a baseline
 
-The connected project inspection on 2026-10-10 returned an empty migration listing even though the live database contains the application's tables, policies, indexes, function, event trigger, storage bucket, and Realtime publication. The baseline and following files form an **idempotent clean-install schema plus forward migrations**; they still must be reconciled against the live project before release.
+The connected project inspection on 2026-10-10 returned an empty migration listing even though the live database contains the application's tables, policies, indexes, function, event trigger, storage bucket, and Realtime publication. The new idempotent baseline creates the five core RTO tables for a clean install. The existing project's functions, event trigger, storage policies, publication settings, grants, and any schema drift still require full reconciliation before release.
 
 Before any database release:
-1. Capture and review a complete schema baseline from the connected Supabase project, including tables, constraints, indexes, RLS policies, grants, functions, triggers, storage policies, and publication membership.
+1. Capture and review a complete schema snapshot from the connected Supabase project, including tables, constraints, indexes, RLS policies, grants, functions, triggers, storage policies, and publication membership.
 2. Reconcile that baseline with the root-level `ENABLE_SCHEDULE_AND_BOOKING_LABEL.sql`.
 3. Verify the target project, existing data, duplicate review rows, and migration status.
 4. Apply the forward migrations to an isolated Supabase environment.
