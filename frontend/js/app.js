@@ -542,7 +542,7 @@ function logEvent(slugValue, type, label){
   if (IS_NETLIFY_PREVIEW) return;
 
   if (!sb) return;
-  try { rtoApi("event-log", { slug: slugValue, eventType: type, label: label || null }); } catch(e) { /* best-effort, never blocks the visitor */ }
+  try { rtoApi("event-log", { slug: slugValue, eventType: type, label: label || null }).catch(() => {}); } catch(e) { /* best-effort, never blocks the visitor */ }
 }
 function renderAnalyticsModal(slugValue, name){
   const old = document.getElementById("analyticsModal");
