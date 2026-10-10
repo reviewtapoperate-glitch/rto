@@ -122,6 +122,10 @@ assert.equal(ownerLogin.status, 200, "valid legacy owner code should be accepted
 assert.equal(customer.owner_code, null, "successful legacy owner login must clear plaintext code");
 assert.match(customer.owner_code_hash, /^hmac-sha256:/, "successful legacy owner login must store a keyed hash");
 const ownerCookie = sessionCookie(ownerLogin);
+customer.owner_code = "STALE-CODE";
+const staleOwnerCode = await call("owner-login", { slug: "demo", code: "STALE-CODE" });
+assert.equal(staleOwnerCode.status, 401, "legacy plaintext must not override an existing hash");
+customer.owner_code = null;
 const crossBusinessEdit = await call("customer-save", { record: { slug: "another-business", name: "No", business_type: "Cafe" } }, ownerCookie);
 assert.equal(crossBusinessEdit.status, 403, "owner session must not edit another business");
 
@@ -138,6 +142,10 @@ assert.match(members[0].access_code_hash, /^hmac-sha256:/, "new member code must
 
 const memberLogin = await call("member-login", { phone: "254711111111", code: signupBody.accessCode });
 assert.equal(memberLogin.status, 200, "hashed member access code should authenticate");
+members[0].access_code = "STALE-CODE";
+const staleMemberCode = await call("member-login", { phone: "254711111111", code: "STALE-CODE" });
+assert.equal(staleMemberCode.status, 401, "legacy plaintext must not override an existing member code hash");
+members[0].access_code = null;
 const memberSession = await call("session", {}, memberCookie);
 assert.equal((await memberSession.json()).session.role, "member");
 const reviewSubmit = await call("review-submit", { slug: "demo", rating: 5, comment: "Test review", member_id: "spoofed-id", member_name: "Impersonated" }, memberCookie);
