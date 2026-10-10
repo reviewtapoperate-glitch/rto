@@ -28,9 +28,9 @@ None of these migrations has been applied to the connected production project by
 
 ## Free CI checks
 
-GitHub Actions run [#38068272240](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38068272240) passed on 2026-10-10. The workflow runs:
+GitHub Actions run [#38069291314](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38069291314) passed on 2026-10-10. The workflow runs:
 - Browser and Netlify function syntax checks.
-- Structural frontend checks and mocked API authentication tests.
+- Structural frontend checks and mocked API tests covering authentication, owner/admin authorization, review authorship, booking validation/isolation, and image upload/delete.
 - All six forward migrations twice against a disposable PostgreSQL 17 fixture, plus the baseline and complete chain twice on a second clean database.
 - Assertions for expected columns, indexes, RLS enablement, and revoked direct client privileges.
 
