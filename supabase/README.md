@@ -19,16 +19,19 @@ Do not point a fresh Supabase project at this migrations directory and assume it
 
 - `202610100001_ensure_schedule_booking_fields.sql`: brings the legacy schedule/booking-label SQL into versioned form using idempotent additions.
 - `202610100002_add_customer_address_maps.sql`: adds the two customer profile fields currently used by the frontend but absent from the observed live schema.
+- `202610100003_add_review_uniqueness_and_query_indexes.sql`: adds the review upsert unique index and common query indexes, aborting if duplicate member/business reviews exist.
+- `202610100004_hash_access_codes.sql`: adds keyed-hash columns and allows legacy member codes to be cleared after successful login.
+- `202610100005_lock_direct_client_data_access.sql`: removes broad direct client grants/policies from RTO data tables and storage mutations. It must only be applied after the matching server API is configured and deployed.
 
-Neither migration has been applied to the connected production project by this change.
+None of these migrations has been applied to the connected production project by this candidate work.
 
 ## Free CI migration smoke test
 
-GitHub Actions runs `tests/sql/migration-smoke.sh` against a disposable PostgreSQL 17 service container. The script creates only minimal `customers` and `bookings` fixture tables, applies all four forward migrations, reapplies them to check idempotency, and asserts expected columns/types/nullability/defaults/indexes and credential-hash columns.
+GitHub Actions runs `tests/sql/migration-smoke.sh` against a disposable PostgreSQL 17 service container. The script creates only minimal `customers` and `bookings` fixture tables, applies all five forward migrations, reapplies them to check idempotency, and asserts expected columns/types/nullability/defaults/indexes and credential-hash columns.
 
 **Scope limitation:** this is a migration syntax/contract smoke test, not a copy of the RTO production schema. It does not test Supabase Auth, Storage, RLS policies, grants, production constraints, or application end-to-end behavior. The fixture must not be mistaken for the missing full database baseline. None of these migrations has been applied to the connected production project by the candidate work.
 
 
 ## Current CI coverage
 
-GitHub Actions run [#38067037973](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38067037973) passed on 2026-10-10. It checks browser JavaScript syntax, structural frontend smoke checks, and all three additive migrations on a disposable PostgreSQL 17 fixture, applying each migration twice. This remains a small-fixture test; it is not a complete production schema baseline, Supabase RLS/security test, or browser end-to-end suite.
+GitHub Actions run [#38067037973](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38067037973) passed on 2026-10-10 for the earlier candidate state. It does not cover the later server API, credential-hash migration, or client-access lockdown migration; the updated workflow must pass again before this candidate is considered verified. This remains a small-fixture test; it is not a complete production schema baseline, Supabase RLS/security test, or browser end-to-end suite.
