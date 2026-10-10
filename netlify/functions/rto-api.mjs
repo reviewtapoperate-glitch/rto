@@ -96,6 +96,11 @@ export default async (request, context) => {
   let body;
   try { body = await request.json(); } catch { return json({ error: "Invalid JSON request." }, 400); }
   const action = String(body?.action || "");
+  const previewSafeActions = new Set(["session", "logout", "public-customer", "directory", "slug-exists", "owner-info", "reviews-list", "reviews-for-slugs"]);
+  const deployContext = context?.deploy?.context;
+  if (deployContext && deployContext !== "production" && !previewSafeActions.has(action)) {
+    return json({ error: "Write and privileged actions are disabled on deploy previews. Use an isolated staging environment for functional tests." }, 403);
+  }
   try {
     if (action === "logout") return json({ ok: true }, 200, { "set-cookie": clearCookie() });
     if (action === "session") {
