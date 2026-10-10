@@ -17,7 +17,7 @@ This repository is ReviewTapOperate (RTO), a static web app for business landing
 ## Verified architecture baseline — re-check before relying on it
 
 - GitHub repository: `reviewtapoperate-glitch/rto`.
-- Current app: primarily a single static `index.html` containing HTML, CSS, and browser JavaScript.
+- Production `main` baseline: a single static root `index.html` containing HTML, CSS, and browser JavaScript. The `production-ready-candidate` branch extracts these into `frontend/index.html`, `frontend/css/styles.css`, and `frontend/js/app.js` while preserving the existing CSS and browser logic.
 - Browser dependencies currently include Supabase JS v2 via jsDelivr, QRCodeJS via cdnjs, and Manrope/Caveat via Google Fonts.
 - Netlify project: `reviewtapoperate`; public site: https://reviewtapoperate.netlify.app; production branch: `main`. It serves the current static site.
 - Supabase project ref: `ptmznpjsgdkasvywufcx`, region `eu-west-1`.
