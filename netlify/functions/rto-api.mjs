@@ -60,6 +60,7 @@ function randomAccessCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   return Array.from(bytes, b => chars[b % chars.length]).join("");
 }
+async function hashCredential(value, secret) { return "hmac-sha256:" + await sign("rto-credential:" + value, secret); }
 async function supabaseRequest(path, method = "GET", body) {
   const url = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
@@ -85,7 +86,7 @@ async function supabaseRequest(path, method = "GET", body) {
 }
 function safeOwnerRecord(row) {
   if (!row) return null;
-  const { owner_code, ...safe } = row;
+  const { owner_code, owner_code_hash, access_code, access_code_hash, ...safe } = row;
   return safe;
 }
 export default async (request, context) => {
@@ -109,6 +110,35 @@ export default async (request, context) => {
       const token = await makeSession({ role: "admin" }, sessionSecret);
       return json({ ok: true }, 200, { "set-cookie": sessionCookie(token) });
     }
+    if (action === "business-signup") {
+      const name = String(body?.name || "").trim().slice(0, 120);
+      const businessType = String(body?.businessType || "").trim().slice(0, 80);
+      const phone = normalizePhone(body?.phone);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (name.length < 2 || !businessType || phone.length < 7 || !/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Please complete the business name, type, phone, and link fields." }, 400);
+      const code = randomAccessCode();
+      const codeHash = await hashCredential(code, sessionSecret);
+      const rows = await supabaseRequest("customers", "POST", {
+        slug, name, business_type: businessType, phone, owner_code: null, owner_code_hash: codeHash,
+        portfolio: [], menu_items: [], social_links: [], portfolio_title: "Recent work", theme: "neon"
+      });
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!row) return json({ error: "Business page could not be created." }, 500);
+      return json({ ok: true, customer: { ...safeOwnerRecord(row), owner_code: code } }, 201);
+    }
+    if (action === "admin-owner-code") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
+      const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!row) return json({ error: "Business page not found." }, 404);
+      const code = randomAccessCode();
+      const codeHash = await hashCredential(code, sessionSecret);
+      await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "PATCH", { owner_code: null, owner_code_hash: codeHash });
+      return json({ ok: true, code });
+    }
     if (action === "owner-info") {
       const slug = String(body?.slug || "").trim().toLowerCase();
       if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
@@ -122,7 +152,13 @@ export default async (request, context) => {
       if (!/^[a-z0-9-]{1,80}$/.test(slug) || !code) return json({ error: "Enter a valid link and access code." }, 400);
       const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
-      if (!row || !row.owner_code || !constantTimeEqual(String(row.owner_code).toUpperCase(), code)) return json({ error: "Incorrect access code or link." }, 401);
+      const submittedHash = await hashCredential(code, sessionSecret);
+      const hashValid = row?.owner_code_hash && constantTimeEqual(String(row.owner_code_hash), submittedHash);
+      const legacyValid = row?.owner_code && constantTimeEqual(String(row.owner_code).toUpperCase(), code);
+      if (!row || (!hashValid && !legacyValid)) return json({ error: "Incorrect access code or link." }, 401);
+      if (legacyValid && !hashValid) {
+        await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "PATCH", { owner_code_hash: submittedHash, owner_code: null });
+      }
       const token = await makeSession({ role: "owner", slug: row.slug }, sessionSecret);
       return json({ ok: true, customer: safeOwnerRecord(row) }, 200, { "set-cookie": sessionCookie(token) });
     }
@@ -131,7 +167,8 @@ export default async (request, context) => {
       const phone = normalizePhone(body?.phone);
       if (name.length < 2 || phone.length < 7 || phone.length > 20) return json({ error: "Enter a valid name and phone number." }, 400);
       const code = randomAccessCode();
-      const rows = await supabaseRequest("members", "POST", { name, phone, access_code: code });
+      const codeHash = await hashCredential(code, sessionSecret);
+      const rows = await supabaseRequest("members", "POST", { name, phone, access_code: null, access_code_hash: codeHash });
       const row = Array.isArray(rows) ? rows[0] : null;
       if (!row) return json({ error: "Account could not be created." }, 500);
       const member = { id: row.id, name: row.name, phone: row.phone };
@@ -142,9 +179,15 @@ export default async (request, context) => {
       const phone = normalizePhone(body?.phone);
       const code = String(body?.code || "").trim().toUpperCase();
       if (phone.length < 7 || !code) return json({ error: "Enter your phone and access code." }, 400);
-      const rows = await supabaseRequest("members?select=id,name,phone,access_code&phone=eq." + encodeURIComponent(phone) + "&limit=1");
+      const rows = await supabaseRequest("members?select=id,name,phone,access_code,access_code_hash&phone=eq." + encodeURIComponent(phone) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
-      if (!row || !constantTimeEqual(String(row.access_code || "").toUpperCase(), code)) return json({ error: "No match found — check your phone and code." }, 401);
+      const submittedHash = await hashCredential(code, sessionSecret);
+      const hashValid = row?.access_code_hash && constantTimeEqual(String(row.access_code_hash), submittedHash);
+      const legacyValid = row?.access_code && constantTimeEqual(String(row.access_code).toUpperCase(), code);
+      if (!row || (!hashValid && !legacyValid)) return json({ error: "No match found — check your phone and code." }, 401);
+      if (legacyValid && !hashValid) {
+        await supabaseRequest("members?id=eq." + encodeURIComponent(row.id), "PATCH", { access_code_hash: submittedHash, access_code: null });
+      }
       const member = { id: row.id, name: row.name, phone: row.phone };
       const token = await makeSession({ role: "member", member }, sessionSecret);
       return json({ ok: true, member }, 200, { "set-cookie": sessionCookie(token) });
