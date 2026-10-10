@@ -5,7 +5,7 @@ Production remains on `main`. This branch is a review candidate, not a productio
 
 ## Candidate changes
 
-- Extracted the existing page into `frontend/index.html`, `frontend/css/styles.css`, and `frontend/js/app.js`. The existing CSS file and visual theme definitions were preserved; no redesign was made.
+- Extracted the existing page into `frontend/index.html`, `frontend/css/styles.css`, and `frontend/js/app.js`. Verified that the extracted CSS exactly matches the original style block in `main/index.html` (13,402 characters); no redesign was made.
 - Configured Netlify to publish `frontend/`, retained `robots.txt`, and added conservative static response headers.
 - Removed direct browser Supabase table and Storage mutations. The frontend now calls a same-origin Netlify Function for business data, reviews, bookings, analytics, and image operations.
 - Added server-verified admin, owner, and member sign-in; signed HttpOnly/Secure/SameSite=Lax cookies; role/slug authorization; one-time access-code generation; keyed access-code hashes; and legacy-code upgrade on successful login.
@@ -22,7 +22,7 @@ GitHub Actions run [#38069291314](https://github.com/reviewtapoperate-glitch/rto
 - Structural frontend checks: passed.
 - Mocked server API checks for authentication, owner/admin authorization, review authorship, booking isolation/validation, and image upload/delete: passed.
 - All six forward migrations applied twice to a disposable PostgreSQL 17 fixture: passed. The clean-install baseline plus all six migrations also passed twice on a second disposable database.
-- Fixture assertions for RLS enablement and removal of direct client table privileges: passed.
+- Fixture assertions for RLS enablement, removal of direct client table privileges, retained server-role grants, and idempotent schema creation: passed.
 
 These are meaningful automated checks, but they do not establish that the app works against the actual Supabase schema, that Supabase Storage behaves correctly after the lockdown, or that every end-to-end user journey passes.
 
