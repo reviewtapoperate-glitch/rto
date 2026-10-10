@@ -1,6 +1,6 @@
 # RTO server-side authentication configuration
 
-The `rto-api` Netlify Function is now used for admin, owner-code, and member sign-in. It fails closed if the server-only configuration is missing.
+The `rto-auth` Netlify Function routes admin, owner-code, and member sign-in through a stricter IP rate limit. It delegates to the shared handler in `rto-api.mjs`; ordinary data operations use `rto-api`. It fails closed if the server-only configuration is missing.
 
 ## Required Netlify environment variables
 
