@@ -24,9 +24,9 @@ Neither migration has been applied to the connected production project by this c
 
 ## Free CI migration smoke test
 
-GitHub Actions runs `tests/sql/migration-smoke.sh` against a disposable PostgreSQL 17 service container. The script creates only minimal `customers` and `bookings` fixture tables, applies both additive migrations, reapplies them to check idempotency, and asserts expected columns/types/nullability/defaults.
+GitHub Actions runs `tests/sql/migration-smoke.sh` against a disposable PostgreSQL 17 service container. The script creates only minimal `customers` and `bookings` fixture tables, applies all four forward migrations, reapplies them to check idempotency, and asserts expected columns/types/nullability/defaults/indexes and credential-hash columns.
 
-**Scope limitation:** this is a migration syntax/contract smoke test, not a copy of the RTO production schema. It does not test Supabase Auth, Storage, RLS policies, grants, production constraints, or application end-to-end behavior. The fixture must not be mistaken for the missing full database baseline.
+**Scope limitation:** this is a migration syntax/contract smoke test, not a copy of the RTO production schema. It does not test Supabase Auth, Storage, RLS policies, grants, production constraints, or application end-to-end behavior. The fixture must not be mistaken for the missing full database baseline. None of these migrations has been applied to the connected production project by the candidate work.
 
 
 ## Current CI coverage
