@@ -4,12 +4,14 @@ set -euo pipefail
 : "${DATABASE_URL:?DATABASE_URL must point to an empty disposable PostgreSQL database}"
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-DO $$
+DO $
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN BYPASSRLS; END IF;
-END $$;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+     OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+     OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    RAISE EXCEPTION 'Run the forward migration fixture first to create the Supabase roles';
+  END IF;
+END $;
 SQL
 
 migrations=(
