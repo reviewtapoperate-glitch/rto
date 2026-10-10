@@ -27,7 +27,7 @@ const calls = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(String(input));
   const method = init.method || "GET";
-  const body = init.body ? JSON.parse(String(init.body)) : null;
+  const body = init.body && url.pathname.startsWith("/rest/v1/") ? JSON.parse(String(init.body)) : null;
   calls.push({ url: url.toString(), method, body });
 
   if (url.pathname === "/rest/v1/customers" && method === "GET") {
