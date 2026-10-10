@@ -89,9 +89,13 @@ Run in an isolated non-production environment with seeded test data:
 - [x] JavaScript syntax and structural smoke tests.
 - [x] PostgreSQL 17 CI migration smoke test against minimal fixture tables (both migrations applied twice).
 - [ ] Isolated environment for full application tests.
-- [ ] Trusted admin/owner/member authentication and server-side authorization.
+- [x] Candidate server-verified admin/owner/member sign-in, signed HttpOnly cookies, and one-time hashed owner-code issuance.
+- [x] Candidate data operations routed through the server API with role/slug checks for customer edits, reviews, bookings, analytics, and storage mutations.
+- [x] Candidate image uploads validate MIME, file signature, and a 3 MB limit.
 - [ ] Complete schema baseline and reviewed migration path.
-- [ ] Tightened RLS, grants, storage policies, and function execution permissions.
+- [ ] Configure Netlify Function secrets and verify deployed function behavior; preview deploys intentionally block write/privileged actions.
+- [x] Staged migration to revoke direct client table/storage mutation privileges, remove broad RTO table policies, and revoke public execution of the exposed RLS helper (not applied to production).
+- [ ] Apply and verify the lockdown against an isolated Supabase environment, including public image delivery.
 - [ ] End-to-end tests for all critical user journeys and authorization denials.
 - [ ] Confirm production WhatsApp number.
 - [ ] Visual regression review.
