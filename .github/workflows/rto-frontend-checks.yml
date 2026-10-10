@@ -22,8 +22,10 @@ jobs:
           node-version: 22
       - name: Check browser JavaScript syntax
         run: node --check frontend/js/app.js
-      - name: Check Netlify authentication function syntax
+      - name: Check Netlify API function syntax
         run: node --check netlify/functions/rto-api.mjs
+      - name: Check rate-limited authentication wrapper syntax
+        run: node --check netlify/functions/rto-auth.mjs
       - name: Run structural smoke checks
         run: node tests/smoke-check.mjs
       - name: Run isolated server API auth tests
