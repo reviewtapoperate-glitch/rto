@@ -9,6 +9,7 @@ Production remains on `main`. This branch is a review candidate, not a productio
 - Configures Netlify to publish `frontend/`.
 - Copies `robots.txt` into the published frontend.
 - Adds conservative response headers without introducing a restrictive CSP that might break existing inline handlers or third-party dependencies.
+- Detects Netlify deploy previews and blocks admin/owner screens, member sign-in/sign-up, review/booking submissions, customer writes/deletion, uploads, storage deletion, and analytics event writes there. This is a UI safety guard, not a substitute for fixing the production database's permissive RLS policies.
 - Adds Node syntax and structural smoke checks.
 - Adds versioned, additive SQL files for the existing schedule/booking fields and the missing `address` and `maps_url` fields.
 - Documents that current migration history is not a full database baseline.
