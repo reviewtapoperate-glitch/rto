@@ -404,7 +404,7 @@ async function renderMyAccountPage(member){
     <div class="wrap" style="max-width:460px;">
       <div class="top-bar">
         <div class="brand" style="margin:20px 0 0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
-        <button class="icon-btn" title="Log out" onclick="clearMemberSession(); renderLanding('home')">&#8630;</button>
+        <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
       <div class="card" style="margin-top:16px;">
         <p style="font-weight:700;margin:0 0 4px;">Hi, ${esc(member.name)}</p>
