@@ -12,8 +12,8 @@ Production remains on `main`. This branch is a review candidate, not a productio
 - Detects Netlify deploy previews and blocks admin/owner screens, member sign-in/sign-up, review/booking submissions, customer writes/deletion, uploads, storage deletion, and analytics event writes there. This is a UI safety guard, not a substitute for fixing the production database's permissive RLS policies.
 - Adds Node syntax and structural smoke checks, including assertions that browser code no longer contains the admin passcode and that sign-in routes through the server API.
 - Adds a GitHub Actions PostgreSQL 17 service-container test for the three additive SQL migrations. The test uses minimal fixture tables, applies migrations twice, and checks expected columns/types/defaults and indexes.
-- Adds versioned, additive SQL files for the existing schedule/booking fields, missing `address` and `maps_url` fields, the review upsert's required unique index, and common query indexes. The review index migration aborts if duplicate business/member reviews are found.
-- Adds a Netlify server-side authentication endpoint for admin, owner-code, and member sign-in, using signed HttpOnly cookies; documents required server-only secrets and its current migration limitations.
+- Adds versioned SQL migrations for schedule/booking fields, missing `address` and `maps_url` fields, review uniqueness/query indexes, access-code hash columns, and a staged lockdown of direct client database/storage mutation privileges.
+- Adds a Netlify server-side API for public business data, admin/owner/member sign-in, business CRUD, bookings, reviews, analytics, and image upload/delete. Admin/owner/member sessions use signed HttpOnly cookies. Browser-side direct Supabase table operations and storage mutations have been removed from the candidate code. Required server-only secrets and migration limitations are documented.
 - Documents that current migration history is not a full database baseline.
 
 ## Mandatory blockers before production approval
@@ -25,7 +25,7 @@ These are not solved by a file split and must not be treated as passed:
 3. **Migration verification:** CI now tests the additive migration files on minimal disposable PostgreSQL fixture tables, including reapplication/idempotency. This does **not** verify the complete production schema, Supabase-specific behavior, or the actual live project. The migrations remain unapplied to production; profile save behavior and review upsert behavior still need non-production end-to-end verification.
 4. **Contact number:** `CONTACT_WHATSAPP` is still the source's placeholder `254700000000`; confirm the correct contact number before release.
 5. **Storage:** public uploads currently lack file-size and MIME restrictions. Agree and test the intended rules.
-6. **Runtime/end-to-end tests:** syntax and migration smoke checks do not prove login, owner editing, admin operations, bookings, reviews, uploads, analytics, Realtime, QR destinations, mobile layouts, or SEO behavior work.
+6. **Runtime/end-to-end tests:** the server API and frontend have been wired together in the candidate, but syntax and fixture migration checks do not prove runtime behavior. Test login, owner editing, admin operations, bookings, reviews, uploads, analytics, profile refresh, QR destinations, mobile layouts, and SEO in an isolated environment.
 7. **NFC:** actual NFC tag programming and physical-device testing must be done outside the web app.
 
 ## Security and implementation work order
