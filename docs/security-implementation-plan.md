@@ -92,7 +92,8 @@ Run in an isolated non-production environment with seeded test data:
 - [x] Candidate server-verified admin/owner/member sign-in, signed HttpOnly cookies, and one-time hashed owner-code issuance.
 - [x] Candidate data operations routed through the server API with role/slug checks for customer edits, reviews, bookings, analytics, and storage mutations.
 - [x] Candidate image uploads validate MIME, file signature, and a 3 MB limit.
-- [ ] Complete schema baseline and reviewed migration path.
+- [x] Add idempotent core-table schema baseline and forward migration chain.
+- [ ] Reconcile the baseline with all live functions, event triggers, storage policies, grants, and publication settings.
 - [ ] Configure Netlify Function secrets and verify deployed function behavior; preview deploys intentionally block write/privileged actions.
 - [x] Staged migration to revoke direct client table/storage mutation privileges, remove broad RTO table policies, and revoke public execution of the exposed RLS helper (not applied to production).
 - [ ] Apply and verify the lockdown against an isolated Supabase environment, including public image delivery.
