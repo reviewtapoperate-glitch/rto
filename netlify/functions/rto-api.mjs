@@ -63,7 +63,7 @@ function randomAccessCode() {
 async function hashCredential(value, secret) { return "hmac-sha256:" + await sign("rto-credential:" + value, secret); }
 async function supabaseRequest(path, method = "GET", body, prefer = "return=representation") {
   const url = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
+  const key = env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
   if (!key) throw new Error("Server authentication is not configured.");
   const response = await fetch(url + "/rest/v1/" + path, {
     method,
@@ -365,7 +365,7 @@ export async function handleRtoApi(request, context) {
       if (!signatureOk) return json({ error: "The selected file is not a valid image of the declared type." }, 400);
       const path = slug + "/" + tag + "-" + Date.now() + "-" + filename;
       const baseUrl = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
-      const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+      const serviceKey = env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
       if (!serviceKey) return json({ error: "Server storage is not configured." }, 503);
       const response = await fetch(baseUrl + "/storage/v1/object/rto-photos/" + path.split("/").map(encodeURIComponent).join("/"), {
         method: "POST",
