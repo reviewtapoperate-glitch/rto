@@ -63,29 +63,29 @@ Observed row counts at audit time: customers 6, page_events 0, members 2, review
 
 The source reads and writes `customers.address` and `customers.maps_url`, including in the profile form, public page, and the object sent by `saveCustomer()`. The live `customers` column inventory inspected did not include either column. Because the save uses an upsert containing both fields, the save request is expected to fail with a missing-column/schema-cache error until source and schema are reconciled. Confirm against the live schema immediately before preparing a migration.
 
-### 2. Review upsert has no matching unique constraint in the observed schema
+### 2. Review upsert conflict target is currently supported by a unique index
 
-`submitReview()` calls `upsert(..., { onConflict: "business_slug,member_id" })`. The inspected `reviews` table had a primary key on `id`, but no unique constraint/index on `(business_slug, member_id)`. PostgreSQL/PostgREST upsert conflict targeting requires a matching unique/exclusion constraint. Review submission is therefore expected to fail unless the live constraint inventory differs from the inspection. Decide product rules first (one review per member per business versus multiple reviews) before adding a constraint.
+`submitReview()` uses `upsert(..., { onConflict: "business_slug,member_id" })`. The latest live index inventory confirms `reviews_business_slug_member_id_key` on `(business_slug, member_id)`, so the specific missing-conflict-index concern from the earlier inspection is no longer supported by current evidence. The product behavior represented by this constraint is one review row per member per business. Keep this index intact unless the user explicitly approves a different review model. Runtime review submission is still **not yet proven**; it needs a controlled end-to-end test.
 
 ### 3. Client-only authorization is not secure
 
 The admin passcode is hard-coded in browser JavaScript (`ADMIN_PASSCODE`), and the sessionStorage flag only hides/shows UI. Owner code checking and member access-code comparison also happen in the browser after broad client queries. These are not trusted authentication mechanisms.
 
-### 4. Broad RLS policies expose modification/read operations
+### 4. Current RLS policies and table grants allow broad public-role access
 
-The prior live policy inspection showed public-role policies allowing broad operations on customers (including delete/insert/update/select), members (select/insert/update), reviews (select/insert/update/delete), and bookings (select/insert/update). Exact grants and policy definitions must be re-read before remediation. RLS being enabled does not make these policies restrictive. Member access codes and private booking/contact details require particular attention.
+The latest live policy query confirms policies with role `public` and unconditional `true` predicates for broad select/insert/update/delete operations: `customers` (select/insert/update/delete), `members` (select/insert/update), `reviews` (select/insert/update/delete), `bookings` (select/insert/update), and `page_events` (select/insert). The current table-grant inventory also shows `anon` and `authenticated` grants across all listed table privileges, including update/delete on sensitive tables. Effective access depends on grants plus RLS; both layers need a deliberate least-privilege design. Treat member access codes, owner codes, booking contact details, and admin actions as high priority. No policies or grants were changed during this audit.
 
 ### 5. Public Storage upload policy
 
 The observed `rto-photos` bucket is public, with public read and insert policies for anon/authenticated roles and no configured file-size/MIME allowlist. Public image reads may be intentional; unrestricted uploads need review. Do not change the bucket until the intended public upload and read behavior is agreed.
 
-### 6. Exposed SECURITY DEFINER function
+### 6. SECURITY DEFINER event-trigger function is callable by API roles
 
-The connected security advisor reported that `public.rls_auto_enable()` is a `SECURITY DEFINER` function executable by anon and authenticated roles through the exposed API. Its body is an event-trigger function that enables RLS on new public tables. Confirm its event-trigger attachment, execution grants, and intended exposure; do not simply delete it or change its security mode without reviewing dependencies.
+The live function inventory confirms `public.rls_auto_enable()` is `SECURITY DEFINER`, has `search_path=pg_catalog`, and has execute ACL entries for `anon`, `authenticated`, and `service_role`. The live event-trigger inventory shows it attached to the `ensure_rls` event trigger for `ddl_command_end`. Because it is an event-trigger function, normal direct RPC invocation may not be possible, but its execute grant is still unnecessary exposure to review. Do not remove it or alter its security mode until its platform dependency and event-trigger behavior are understood. No function grants or triggers were changed during this audit.
 
-### 7. Missing foreign-key indexes
+### 7. Four foreign-key columns have no matching leading index in the current index inventory
 
-The performance advisor reported four unindexed foreign keys: `bookings.business_slug`, `bookings.member_id`, `page_events.slug`, and `reviews.member_id`. Confirm existing indexes before creating any. Indexes are performance work, separate from authorization fixes.
+The live index inventory contains only primary/unique indexes for the five app tables and confirms no index beginning with these foreign-key columns: `bookings.business_slug`, `bookings.member_id`, `page_events.slug`, and `reviews.member_id`. The existing unique index on `reviews(business_slug, member_id)` does cover `reviews.business_slug` as its leading column, but not `reviews.member_id`; it does not resolve the latter. Consider separate performance migrations only after authorization/schema priorities and query needs are agreed.
 
 ### 8. Migration history is not reconciled
 
@@ -140,3 +140,23 @@ This is not the current repository tree. Do not move files or change Netlify's p
 ## Out of scope unless separately approved
 
 - Visual redesign, changing colors/layout/typography/themes, changing public URL formats, removing existing features, replacing the static app with a framework, changing NFC hardware behavior, deleting production data, or applying production SQL/policy changes without a reviewed migration plan.
+
+
+## Latest read-only live verification — 2026-10-10
+
+This section supersedes earlier findings where the live evidence differs. The audit queried the connected GitHub repository, Netlify project, and Supabase project. No app code, database schema/data, policy, storage setting, or production deployment was changed.
+
+- **GitHub / Netlify:** production branch `main`; production commit `226ac77382d03c0f640dc8109d4f911d29b980f4`; Netlify deploy `6aca1636215a534772a84bce` reports `ready`. The deploy explicitly reports no Netlify Functions and no Edge Functions.
+- **Supabase migrations / functions:** migration listing is empty; Edge Function listing is empty. This is not proof that no SQL was applied outside the recorded migration history.
+- **Review uniqueness:** current live index inventory confirms `reviews_business_slug_member_id_key` on `(business_slug, member_id)`. The earlier statement that this index was absent was stale and is corrected above.
+- **Missing customer columns:** current live `customers` columns still do not include `address` or `maps_url`, while source uses those properties. Reconcile intended product behavior and migration baseline before making a schema change.
+- **Existing SQL file:** `ENABLE_SCHEDULE_AND_BOOKING_LABEL.sql` contains three `ADD COLUMN IF NOT EXISTS` statements for `customers.schedule`, `customers.booking_label`, and `bookings.item_requested`. All three columns are already present in the current live schema. Do not run the file blindly; preserve it until its role in the migration baseline is decided.
+- **RLS / grants:** live policies are unconditional for the public role across the operations listed in finding 4. The table-grant inventory shows broad grants to `anon` and `authenticated`. This is a security remediation priority, but any tightening must be designed and tested against legitimate public page reads, bookings, reviews, member account behavior, owner editing, and admin workflows.
+- **Storage:** `rto-photos` is public, with no configured file-size or allowed-MIME-type limits. Policies allow anon/authenticated inserts and reads for that bucket.
+- **Realtime:** `customers` is present in `supabase_realtime`, matching the source subscription's table target. This confirms publication membership, not a successful browser reconnect/update test.
+- **Database functions/triggers:** the live public function inventory includes `rls_auto_enable()` as a SECURITY DEFINER event-trigger function; the `ensure_rls` event trigger is enabled. No app-specific triggers on the five app tables were returned.
+- **Unindexed FK columns:** current indexes do not include leading indexes for `bookings.business_slug`, `bookings.member_id`, `page_events.slug`, and `reviews.member_id`. The composite unique index on `reviews(business_slug, member_id)` does not cover `reviews.member_id` as a leading column.
+
+### Audit conclusion
+
+The current architecture can be separated incrementally without a visual redesign, but **moving files is not the first corrective action**. First agree on the security model and resolve the live/source schema mismatch, then establish migration tracking and implement least-privilege access in a test environment. Only after those checks should the static frontend be extracted into files while retaining the current page URLs and CSS. End-to-end behavior remains unverified until the tests in `verification.md` are executed.
