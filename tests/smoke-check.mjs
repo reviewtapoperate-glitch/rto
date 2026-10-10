@@ -5,10 +5,12 @@ const htmlPath = "frontend/index.html";
 const cssPath = "frontend/css/styles.css";
 const jsPath = "frontend/js/app.js";
 const apiPath = "netlify/functions/rto-api.mjs";
+const authPath = "netlify/functions/rto-auth.mjs";
 const html = readFileSync(htmlPath, "utf8");
 const css = readFileSync(cssPath, "utf8");
 const js = readFileSync(jsPath, "utf8");
 const api = readFileSync(apiPath, "utf8");
+const auth = readFileSync(authPath, "utf8");
 const toml = readFileSync("netlify.toml", "utf8");
 
 assert(existsSync(htmlPath), "frontend HTML must exist");
@@ -43,6 +45,7 @@ assert.match(api, /owner_code_hash/, "owner credentials must support hashed stor
 assert.match(api, /access_code_hash/, "member credentials must support hashed storage");
 assert.match(api, /action === "upload-image"/, "image uploads must pass through validated server-side handling");
 assert.match(api, /action === "delete-image"/, "image deletion must be authorized server-side");
+assert.match(auth, /windowLimit: 15/, "authentication endpoint must have a stricter IP rate limit");
 assert.match(js, /submitBooking/, "booking flow must remain present");
 assert.match(js, /submitReview/, "review flow must remain present");
 assert.match(js, /subscribeToLiveUpdates/, "Realtime subscription code must remain present");
