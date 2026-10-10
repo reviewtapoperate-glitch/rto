@@ -22,6 +22,8 @@ jobs:
           node-version: 22
       - name: Check browser JavaScript syntax
         run: node --check frontend/js/app.js
+      - name: Check Netlify authentication function syntax
+        run: node --check netlify/functions/rto-api.mjs
       - name: Run structural smoke checks
         run: node tests/smoke-check.mjs
 
