@@ -150,6 +150,7 @@ assert.equal(ownerBookingList.status, 200, "owner should only access bookings fo
 const bookingStatus = await call("booking-status", { id: booking.id, status: "confirmed" }, ownerCookie);
 assert.equal(bookingStatus.status, 200, "owner should update their own booking status");
 const upload = await call("upload-image", { slug: "demo", tag: "photo", filename: "test.png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" }, ownerCookie);
+console.log("Upload mock trace:", upload.status, calls.slice(-2));
 assert.equal(upload.status, 201, "authorized owner should upload a valid image");
 const uploadedPath = (await upload.json()).path;
 const deleteImage = await call("delete-image", { slug: "demo", path: uploadedPath }, ownerCookie);
