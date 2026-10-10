@@ -32,6 +32,6 @@ GitHub Actions run [#38069291314](https://github.com/reviewtapoperate-glitch/rto
 - Browser and Netlify function syntax checks.
 - Structural frontend checks and mocked API tests covering authentication, owner/admin authorization, review authorship, booking validation/isolation, and image upload/delete.
 - All six forward migrations twice against a disposable PostgreSQL 17 fixture, plus the baseline and complete chain twice on a second clean database.
-- Assertions for expected columns, indexes, RLS enablement, and revoked direct client privileges.
+- Assertions for expected columns, indexes, RLS enablement, revoked direct client privileges, retained service-role grants, and clean-install idempotency.
 
 **Scope limitation:** the PostgreSQL fixture is deliberately minimal. It does not reproduce the full RTO schema, Supabase Auth, Storage, production constraints, the live project, or complete browser workflows. The mocked API test uses no live database. These checks do not replace isolated Supabase integration tests.
