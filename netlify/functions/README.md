@@ -24,7 +24,7 @@ Scope the secret variables to Functions runtime. After configuring them, trigger
 - `member-signup` / `member-login`: verify member access codes server-side and issue a signed cookie.
 - `session` / `logout`: inspect or clear the signed session cookie.
 
-The endpoint has an IP rate-limit configuration. No CORS wildcard is added; it is intended to be called same-origin by the site.
+The endpoint has an IP rate-limit configuration. Non-production deploy contexts block privileged and write actions server-side; preview UI guards alone are not relied on. No CORS wildcard is added; it is intended to be called same-origin by the site.
 
 ## Important incomplete migration boundary
 
