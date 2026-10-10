@@ -409,4 +409,4 @@ export default async (request, context) => {
     return json({ error: "The request could not be completed. Check the server configuration and try again." }, 500);
   }
 };
-export const config = { rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 30 } };
+export const config = { rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 120 } };
