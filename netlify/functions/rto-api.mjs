@@ -60,7 +60,11 @@ function randomAccessCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   return Array.from(bytes, b => chars[b % chars.length]).join("");
 }
-async function hashCredential(value, secret) { return "hmac-sha256:" + await sign("rto-credential:" + value, secret); }
+async function hashCredential(value) {
+  const pepper = env("RTO_CREDENTIAL_PEPPER");
+  if (!pepper || pepper.length < 32) throw new Error("Credential hashing is not configured.");
+  return "hmac-sha256:" + await sign("rto-credential:" + value, pepper);
+}
 async function supabaseRequest(path, method = "GET", body, prefer = "return=representation") {
   const url = env("SUPABASE_URL") || "https://ptmznpjsgdkasvywufcx.supabase.co";
   const key = env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
@@ -122,7 +126,7 @@ export async function handleRtoApi(request, context) {
       const slug = String(body?.slug || "").trim().toLowerCase();
       if (name.length < 2 || !businessType || phone.length < 7 || !/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Please complete the business name, type, phone, and link fields." }, 400);
       const code = randomAccessCode();
-      const codeHash = await hashCredential(code, sessionSecret);
+      const codeHash = await hashCredential(code);
       const rows = await supabaseRequest("customers", "POST", {
         slug, name, business_type: businessType, phone, owner_code: null, owner_code_hash: codeHash,
         portfolio: [], menu_items: [], social_links: [], portfolio_title: "Recent work", theme: "neon"
@@ -413,7 +417,7 @@ export async function handleRtoApi(request, context) {
   } catch (error) {
     const message = String(error?.message || "");
     if (message.toLowerCase().includes("duplicate key") || message.toLowerCase().includes("unique constraint")) return json({ error: "That phone is already registered — try logging in instead." }, 409);
-    if (message.includes("Server authentication is not configured.")) return json({ error: message }, 503);
+    if (message.includes("Server authentication is not configured.") || message.includes("Credential hashing is not configured.")) return json({ error: message }, 503);
     return json({ error: "The request could not be completed. Check the server configuration and try again." }, 500);
   }
 }
