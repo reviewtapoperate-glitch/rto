@@ -3,7 +3,6 @@
    ============================================================ */
 const SUPABASE_URL = "https://ptmznpjsgdkasvywufcx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg";
-const ADMIN_PASSCODE = "RTO2026"; // change this before real use
 const CONTACT_WHATSAPP = "254700000000"; // your real WhatsApp number — replace before going live
 const IS_NETLIFY_PREVIEW = location.hostname.includes("--reviewtapoperate.netlify.app") || location.hostname.startsWith("deploy-preview-");
 function blockPreviewWrite(message = "This action is disabled in the verification preview. Use a separate staging database for functional testing.") {
@@ -32,6 +31,23 @@ const params = new URLSearchParams(window.location.search);
 const slug = params.get("c");
 const editSlug = params.get("edit");
 
+async function rtoApi(action, payload = {}) {
+  const response = await fetch("/.netlify/functions/rto-api", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ action, ...payload })
+  });
+  let result = {};
+  try { result = await response.json(); } catch {}
+  if (!response.ok) throw new Error(result.error || "The request could not be completed.");
+  return result;
+}
+async function rtoLogout() {
+  try { await rtoApi("logout"); } catch {}
+  sessionStorage.removeItem("rto_admin");
+  clearMemberSession();
+}
 function toast(msg){
   const t = document.getElementById("toast");
   t.textContent = msg;
@@ -115,37 +131,29 @@ function renderMemberAuthTab(tab){
 }
 async function doMemberSignup(){
   if (blockPreviewWrite("Member sign-up is disabled in the verification preview.")) return;
-
   const name = document.getElementById("ma_name").value.trim();
   const phone = document.getElementById("ma_phone2").value.trim();
   if (!name || !phone) { toast("Enter your name and phone"); return; }
-  const code = generateOwnerCode();
-  const { data, error } = await sb.from("members").insert({ name, phone, access_code: code }).select().maybeSingle();
-  if (error) {
-    if (error.message && error.message.toLowerCase().includes("duplicate")) {
-      toast("That phone is already registered — try logging in instead");
-    } else {
-      toast("Couldn't sign up: " + error.message);
-    }
-    return;
-  }
-  toast(`Account created! Your access code is ${code} — save it.`);
-  setMemberSession({ id: data.id, name: data.name, phone: data.phone });
-  closeMemberAuthModal();
-  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  try {
+    const result = await rtoApi("member-signup", { name, phone });
+    setMemberSession(result.member);
+    toast("Account created! Your access code is " + result.accessCode + " — save it.");
+    closeMemberAuthModal();
+    if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  } catch (error) { toast(error.message || "Couldn't create account."); }
 }
 async function doMemberLogin(){
   if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
-
   const phone = document.getElementById("ma_phone").value.trim();
   const code = document.getElementById("ma_code").value.trim().toUpperCase();
   if (!phone || !code) { toast("Enter your phone and access code"); return; }
-  const { data, error } = await sb.from("members").select("*").eq("phone", phone).maybeSingle();
-  if (error || !data || data.access_code.toUpperCase() !== code) { toast("No match found — check your phone and code"); return; }
-  setMemberSession({ id: data.id, name: data.name, phone: data.phone });
-  toast(`Welcome back, ${data.name}`);
-  closeMemberAuthModal();
-  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  try {
+    const result = await rtoApi("member-login", { phone, code });
+    setMemberSession(result.member);
+    toast("Welcome back, " + result.member.name);
+    closeMemberAuthModal();
+    if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+  } catch (error) { toast(error.message || "No match found — check your phone and code."); }
 }
 function closeMemberAuthModal(){ const m = document.getElementById("memberAuthModal"); if (m) m.remove(); }
 
@@ -999,10 +1007,10 @@ function renderSetupNeeded(){
    ADMIN — passcode gate. Reached only via triple-click on the
    landing page logo, or an already-active admin session.
    ============================================================ */
-function renderAdminGate(){
+async function renderAdminGate(){
   if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative access is disabled in this verification preview."); return; }
 
-  if (sessionStorage.getItem("rto_admin") === "1") return renderDashboard();
+  try { const auth = await rtoApi("session"); if (auth.authenticated && auth.session?.role === "admin") return renderDashboard(); } catch {}
   app.innerHTML = `
     <div class="center-screen">
       <div class="wrap" style="max-width:360px;">
@@ -1017,14 +1025,16 @@ function renderAdminGate(){
     </div>`;
   document.getElementById("pass").addEventListener("keydown", e => { if(e.key==="Enter") checkPass(); });
 }
-function checkPass(){
-  if (blockPreviewWrite("Admin access is disabled in the verification preview.")) return;
-
+async function checkPass(){
+  if (blockPreviewWrite("Admin access is disabled in this verification preview.")) return;
   const v = document.getElementById("pass").value;
-  if (v === ADMIN_PASSCODE) { sessionStorage.setItem("rto_admin","1"); renderDashboard(); }
-  else toast("Wrong passcode");
+  if (!v) { toast("Enter the admin passcode"); return; }
+  try {
+    await rtoApi("admin-login", { password: v });
+    sessionStorage.setItem("rto_admin","1");
+    renderDashboard();
+  } catch (error) { toast(error.message || "Admin sign-in failed."); }
 }
-
 
 /* ============================================================
    ADMIN — dashboard
@@ -1037,7 +1047,7 @@ async function renderDashboard(){
     <div class="wrap">
       <div class="top-bar">
         <div class="brand" style="margin:0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
-        <button class="icon-btn" title="Log out" onclick="sessionStorage.removeItem('rto_admin'); renderLanding('home')">&#8630;</button>
+        <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
       <p class="muted" style="margin:0 0 18px;">Every customer's tap card, one dashboard. Works for any type of business.</p>
       <div class="btn-row" style="margin-top:0;">
@@ -1822,8 +1832,9 @@ async function renderOwnerGate(slugValue){
   if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Owner editing is disabled in this verification preview."); return; }
 
   app.innerHTML = `<div class="center-screen"><p class="muted">Loading…</p></div>`;
-  const { data, error } = await sb.from("customers").select("*").eq("slug", slugValue).maybeSingle();
-  if (error || !data) {
+  let data = null;
+  try { const result = await rtoApi("owner-info", { slug: slugValue }); data = result.customer || null; } catch {}
+  if (!data) {
     app.innerHTML = `<div class="center-screen"><div style="text-align:center;"><p style="font-weight:700;">Link not found</p><p class="muted">This business login link isn't set up. Ask RTO to resend it.</p></div></div>`;
     return;
   }
@@ -1845,21 +1856,16 @@ async function renderOwnerGate(slugValue){
   document.getElementById("ownerCode").addEventListener("keydown", e => { if(e.key==="Enter") checkOwnerCode(slugValue); });
   window.__ownerGateRecord = data;
 }
-function checkOwnerCode(slugValue){
+async function checkOwnerCode(slugValue){
   if (blockPreviewWrite("Owner access is disabled in the verification preview.")) return;
-
   const entered = document.getElementById("ownerCode").value.trim().toUpperCase();
-  const data = window.__ownerGateRecord;
-  if (!data || !data.owner_code) {
-    toast("Access isn't set up for this business yet — ask RTO to generate a code.");
-    return;
-  }
-  if (entered === data.owner_code.toUpperCase()) {
+  if (!entered) { toast("Enter your access code"); return; }
+  try {
+    const result = await rtoApi("owner-login", { slug: slugValue, code: entered });
+    if (!result.customer) throw new Error("This business access could not be verified.");
     currentMode = "owner";
-    renderOwnerEditor(data);
-  } else {
-    toast("Wrong code");
-  }
+    renderOwnerEditor(result.customer);
+  } catch (error) { toast(error.message || "Incorrect access code or link."); }
 }
 
 function renderOwnerEditor(c){
