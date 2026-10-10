@@ -109,6 +109,13 @@ export default async (request, context) => {
       const token = await makeSession({ role: "admin" }, sessionSecret);
       return json({ ok: true }, 200, { "set-cookie": sessionCookie(token) });
     }
+    if (action === "owner-info") {
+      const slug = String(body?.slug || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
+      const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      const row = Array.isArray(rows) ? rows[0] : null;
+      return row ? json({ customer: safeOwnerRecord(row) }) : json({ error: "Business link not found." }, 404);
+    }
     if (action === "owner-login") {
       const slug = String(body?.slug || "").trim().toLowerCase();
       const code = String(body?.code || "").trim().toUpperCase();
