@@ -1420,7 +1420,7 @@ function autoSlug(){
 }
 document.addEventListener("input", e => { if (e.target && e.target.id === "f_slug") slugTouched = true; });
 
-async async function rtoUploadFile(file, slugValue, tag){
+async function rtoUploadFile(file, slugValue, tag){
   if (!file) return null;
   if (file.size > 3 * 1024 * 1024) throw new Error("Images must be 3 MB or smaller.");
   const dataUrl = await new Promise((resolve, reject) => {
