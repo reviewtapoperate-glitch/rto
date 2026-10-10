@@ -39,13 +39,15 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100002_add_
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100003_add_review_uniqueness_and_query_indexes.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100004_hash_access_codes.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100005_lock_direct_client_data_access.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100006_rto_storage_limits.sql
 
-# Idempotency check: applying all four forward migrations again must not fail.
+# Idempotency check: applying all six forward migrations again must not fail.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100001_ensure_schedule_booking_fields.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100002_add_customer_address_maps.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100003_add_review_uniqueness_and_query_indexes.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100004_hash_access_codes.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100005_lock_direct_client_data_access.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100006_rto_storage_limits.sql
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$
