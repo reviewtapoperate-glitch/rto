@@ -359,6 +359,8 @@ function showBookingsInbox(slugValue, businessName){
   loadBookingsInbox(slugValue, businessName);
 }
 async function loadBookingsInbox(slugValue, businessName){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Booking inbox is disabled in this verification preview."); return; }
+
   const body = document.getElementById("bookingsInboxBody");
   const { data, error } = await sb.from("bookings").select("*").eq("business_slug", slugValue).order("created_at", { ascending: false });
   if (!body) return;
@@ -396,6 +398,8 @@ function openMyAccount(){
   else showMemberAuthModal(() => renderMyAccountPage(getMemberSession()));
 }
 async function renderMyAccountPage(member){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Member account data is disabled in this verification preview."); return; }
+
   app.innerHTML = `
     <div class="wrap" style="max-width:460px;">
       <div class="top-bar">
@@ -554,6 +558,8 @@ function renderAnalyticsModal(slugValue, name){
   loadAnalyticsData(slugValue);
 }
 async function loadAnalyticsData(slugValue){
+  if (IS_NETLIFY_PREVIEW) { const body = document.getElementById("analyticsBody"); if (body) body.innerHTML = "<p class=\"hint\">Analytics are disabled in this verification preview.</p>"; return; }
+
   const body = document.getElementById("analyticsBody");
   const { data, error } = await sb.from("page_events").select("event_type,link_label").eq("slug", slugValue);
   if (!body) return; // modal already closed
@@ -759,6 +765,8 @@ async function resolveUniqueSlug(base){
   return base + "-" + Date.now();
 }
 async function doSignup(){
+  if (blockPreviewWrite("Creating business pages is disabled in the verification preview.")) return;
+
   const name = document.getElementById("su_name").value.trim();
   const bizType = document.getElementById("su_biztype").value;
   const phone = document.getElementById("su_phone").value.trim();
@@ -819,6 +827,8 @@ function renderLoginForm(){
   document.getElementById("li_code").addEventListener("keydown", e => { if(e.key==="Enter") doLogin(); });
 }
 async function doLogin(){
+  if (blockPreviewWrite("Owner sign-in is disabled in the verification preview.")) return;
+
   const code = document.getElementById("li_code").value.trim().toUpperCase();
   if (!code) { toast("Enter your access code"); return; }
 
@@ -1020,6 +1030,8 @@ function checkPass(){
    ADMIN — dashboard
    ============================================================ */
 async function renderDashboard(){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative dashboard is disabled in this verification preview."); return; }
+
   currentMode = "admin";
   app.innerHTML = `
     <div class="wrap">
@@ -1039,6 +1051,8 @@ async function renderDashboard(){
 
 let __rtoCustomers = [];
 async function loadCustomerList(){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative customer data is disabled in this verification preview."); return; }
+
   const holder = document.getElementById("listHolder");
   const { data, error } = await sb.from("customers").select("*").order("created_at",{ascending:false});
   if (error) { holder.innerHTML = `<p class="muted">Couldn't load customers: ${esc(error.message)}</p>`; return; }
@@ -1751,6 +1765,8 @@ function closeQr(){ const m = document.getElementById("qrModal"); if (m) m.remov
 
 /* ---- Owner access modal ---- */
 async function showOwnerAccessModal(slug){
+  if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
+
   let c = __rtoCustomers.find(x => x.slug === slug);
   if (!c) { toast("Couldn't find that customer"); return; }
 
@@ -1786,6 +1802,8 @@ function renderOwnerAccessModal(c){
     </div>`);
 }
 async function regenerateOwnerCode(slug){
+  if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
+
   if (!confirm("This makes their old code stop working immediately. Continue?")) return;
   const code = generateOwnerCode();
   const { error } = await sb.from("customers").update({ owner_code: code }).eq("slug", slug);
