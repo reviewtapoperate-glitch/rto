@@ -22,7 +22,7 @@ const scriptTags = [...html.matchAll(/<script\b([^>]*)>/gi)];
 assert(scriptTags.every((match) => /\bsrc\s*=/.test(match[1])), "all scripts must be external files");
 assert.match(css, /--pink\s*:\s*#FF2E88/i, "existing TapCore pink token must be preserved");
 assert.match(css, /--cyan\s*:\s*#00E5FF/i, "existing signal cyan token must be preserved");
-assert.match(js, /SUPABASE_URL/, "Supabase configuration must remain present");
+assert.match(js, /rtoApi/, "browser data access must use the server API");
 assert.match(js, /QRCode/, "QR functionality must remain present");
 assert.match(js, /renderPublicProfile/, "public business profile renderer must remain present");
 assert.match(js, /renderOwnerGate/, "owner route must remain present");
