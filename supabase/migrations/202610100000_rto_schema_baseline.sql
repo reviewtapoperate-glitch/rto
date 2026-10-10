@@ -90,3 +90,10 @@ ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.page_events ENABLE ROW LEVEL SECURITY;
+
+-- The server-only API uses the service_role key and must retain access after
+-- the client roles are locked down in migration 005.
+GRANT ALL PRIVILEGES ON TABLE public.customers, public.members, public.reviews, public.bookings, public.page_events TO service_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
