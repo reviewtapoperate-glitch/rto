@@ -156,6 +156,12 @@ assert.equal(reviews[0].member_name, "Test Member", "review display name must co
 const bookingSubmit = await call("booking-submit", { slug: "demo", name: "Booking Guest", phone: "254722222222", item: "Table", date: "2026-10-15", time: "18:00", note: "Test", member_id: "spoofed-id" });
 assert.equal(bookingSubmit.status, 201, "public visitor should submit a validated booking");
 assert.equal(bookings[0].member_id, null, "anonymous booking must not accept a spoofed member id");
+customer.booking_guidelines = "Please read before booking.";
+const missingGuidelines = await call("booking-submit", { slug: "demo", name: "Guest", phone: "254733333333", date: "2026-10-15", time: "18:00", guidelinesAccepted: false });
+assert.equal(missingGuidelines.status, 400, "booking guidelines must be enforced server-side");
+const invalidDate = await call("booking-submit", { slug: "demo", name: "Guest", phone: "254733333333", date: "tomorrow", time: "18:00", guidelinesAccepted: true });
+assert.equal(invalidDate.status, 400, "booking date format must be validated server-side");
+customer.booking_guidelines = null;
 const booking = bookings[0];
 const ownerBookingList = await call("bookings-list", { slug: "demo" }, ownerCookie);
 assert.equal(ownerBookingList.status, 200, "owner should only access bookings for their business");
