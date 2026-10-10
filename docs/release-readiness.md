@@ -21,7 +21,7 @@ GitHub Actions run [#38069291314](https://github.com/reviewtapoperate-glitch/rto
 - Netlify function syntax: passed.
 - Structural frontend checks: passed.
 - Mocked server API checks for authentication, owner/admin authorization, review authorship, booking isolation/validation, and image upload/delete: passed.
-- All six forward migrations applied twice to a disposable PostgreSQL 17 fixture: passed. The clean-install baseline plus all six migrations also passed twice on a second disposable database.
+- All seven forward migrations applied twice to a disposable PostgreSQL 17 fixture: passed. The clean-install baseline plus all seven migrations also passed twice on a second disposable database.
 - Fixture assertions for RLS enablement, removal of direct client table privileges, retained server-role grants, and idempotent schema creation: passed.
 
 These are meaningful automated checks, but they do not establish that the app works against the actual Supabase schema, that Supabase Storage behaves correctly after the lockdown, or that every end-to-end user journey passes.
@@ -29,8 +29,8 @@ These are meaningful automated checks, but they do not establish that the app wo
 ## Mandatory release blockers
 
 1. **Netlify secrets:** the server function needs `SUPABASE_SERVICE_ROLE_KEY` (legacy service-role JWT required by the current direct REST implementation), plus `RTO_SESSION_SECRET`, `RTO_CREDENTIAL_PEPPER`, and `RTO_ADMIN_PASSWORD` configured in Netlify's Functions environment. Keep the session secret stable to preserve active sessions; keep the separate credential pepper stable because it keys stored access-code hashes. Never commit these secrets or put them in browser code. The available connected Netlify tools do not provide a safe write operation for setting these secrets, so they have not been configured by this work.
-2. **Isolated Supabase verification:** no non-production Supabase project/branch is available. The baseline and six forward migrations remain unapplied to production. The database migration history is empty. The new baseline covers the five core tables, while full reconciliation of the existing function, event trigger, storage policies, publication settings, and all production grants remains required.
-3. **Production schema compatibility:** verify the baseline and all six forward migrations against a schema snapshot matching the actual project, including existing data duplicates before adding the review unique index.
+2. **Isolated Supabase verification:** no non-production Supabase project/branch is available. The baseline and seven forward migrations remain unapplied to production. The database migration history is empty. The new baseline covers the five core tables, while full reconciliation of the existing function, event trigger, storage policies, publication settings, and all production grants remains required.
+3. **Production schema compatibility:** verify the baseline and all seven forward migrations against a schema snapshot matching the actual project, including existing data duplicates before adding the review unique index.
 4. **Storage:** candidate uploads are limited to valid JPG/PNG/WEBP/GIF images no larger than 3 MB. Verify upload/delete behavior and public image delivery in isolated Supabase before applying the storage privilege changes.
 5. **End-to-end tests:** test admin login, business signup/edit/delete, owner-only edits, member signup/login/logout, review create/update/read, booking submission/status/history, image upload/delete, analytics, directory search, QR/share links, mobile layouts, and negative cross-business/member access.
 6. **Contact number:** `CONTACT_WHATSAPP` remains the placeholder `254700000000`; confirm the intended number.
