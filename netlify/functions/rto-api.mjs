@@ -158,8 +158,9 @@ export async function handleRtoApi(request, context) {
       const submittedHash = await hashCredential(code, sessionSecret);
       const rows = await supabaseRequest("customers?select=*&or=(owner_code_hash.not.is.null,owner_code.not.is.null)&limit=1000");
       let row = Array.isArray(rows) ? rows.find(item =>
-        (item.owner_code_hash && constantTimeEqual(String(item.owner_code_hash), submittedHash)) ||
-        (item.owner_code && constantTimeEqual(String(item.owner_code).toUpperCase(), code))
+        item.owner_code_hash
+          ? constantTimeEqual(String(item.owner_code_hash), submittedHash)
+          : item.owner_code && constantTimeEqual(String(item.owner_code).toUpperCase(), code)
       ) : null;
       if (!row) return json({ error: "That access code doesn't match any account." }, 401);
       if (row.owner_code && !row.owner_code_hash) {
@@ -175,10 +176,11 @@ export async function handleRtoApi(request, context) {
       const rows = await supabaseRequest("customers?select=*&slug=eq." + encodeURIComponent(slug) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
       const submittedHash = await hashCredential(code, sessionSecret);
-      const hashValid = row?.owner_code_hash && constantTimeEqual(String(row.owner_code_hash), submittedHash);
-      const legacyValid = row?.owner_code && constantTimeEqual(String(row.owner_code).toUpperCase(), code);
+      const hasHash = Boolean(row?.owner_code_hash);
+      const hashValid = hasHash && constantTimeEqual(String(row.owner_code_hash), submittedHash);
+      const legacyValid = !hasHash && row?.owner_code && constantTimeEqual(String(row.owner_code).toUpperCase(), code);
       if (!row || (!hashValid && !legacyValid)) return json({ error: "Incorrect access code or link." }, 401);
-      if (legacyValid && !hashValid) {
+      if (legacyValid) {
         await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "PATCH", { owner_code_hash: submittedHash, owner_code: null });
       }
       const token = await makeSession({ role: "owner", slug: row.slug }, sessionSecret);
@@ -204,10 +206,11 @@ export async function handleRtoApi(request, context) {
       const rows = await supabaseRequest("members?select=id,name,phone,access_code,access_code_hash&phone=eq." + encodeURIComponent(phone) + "&limit=1");
       const row = Array.isArray(rows) ? rows[0] : null;
       const submittedHash = await hashCredential(code, sessionSecret);
-      const hashValid = row?.access_code_hash && constantTimeEqual(String(row.access_code_hash), submittedHash);
-      const legacyValid = row?.access_code && constantTimeEqual(String(row.access_code).toUpperCase(), code);
+      const hasHash = Boolean(row?.access_code_hash);
+      const hashValid = hasHash && constantTimeEqual(String(row.access_code_hash), submittedHash);
+      const legacyValid = !hasHash && row?.access_code && constantTimeEqual(String(row.access_code).toUpperCase(), code);
       if (!row || (!hashValid && !legacyValid)) return json({ error: "No match found — check your phone and code." }, 401);
-      if (legacyValid && !hashValid) {
+      if (legacyValid) {
         await supabaseRequest("members?id=eq." + encodeURIComponent(row.id), "PATCH", { access_code_hash: submittedHash, access_code: null });
       }
       const member = { id: row.id, name: row.name, phone: row.phone };
