@@ -89,7 +89,7 @@ function safeOwnerRecord(row) {
   const { owner_code, owner_code_hash, access_code, access_code_hash, ...safe } = row;
   return safe;
 }
-export default async (request, context) => {
+export async function handleRtoApi(request, context) {
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405, { allow: "POST" });
   const sessionSecret = env("RTO_SESSION_SECRET");
   if (!sessionSecret || sessionSecret.length < 32) return json({ error: "Server authentication is not configured. Ask the administrator to configure the required Netlify environment variables." }, 503);
@@ -413,5 +413,6 @@ export default async (request, context) => {
     if (message.includes("Server authentication is not configured.")) return json({ error: message }, 503);
     return json({ error: "The request could not be completed. Check the server configuration and try again." }, 500);
   }
-};
+}
+export default handleRtoApi;
 export const config = { rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 120 } };
