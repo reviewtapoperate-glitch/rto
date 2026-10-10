@@ -11,12 +11,12 @@ Production remains on `main`. This branch is a review candidate, not a productio
 - Added server-verified admin, owner, and member sign-in; signed HttpOnly/Secure/SameSite=Lax cookies; role/slug authorization; one-time access-code generation; keyed access-code hashes; and legacy-code upgrade on successful login.
 - Added server-side image upload validation for JPG/PNG/WEBP/GIF, file signatures, a 3 MB size limit, and role/business path checks.
 - Added server-side guards that block privileged and write actions on non-production Netlify deploy contexts.
-- Added an idempotent schema baseline and six forward SQL migrations for schedule/booking fields, address/map fields, review uniqueness/indexes, access-code hashes, direct client access lockdown, and Storage bucket limits.
+- Added an idempotent schema baseline and seven forward SQL migrations for schedule/booking fields, address/map fields, review uniqueness/indexes, access-code hashes, direct client access lockdown, Storage bucket limits, and legacy bigint ID generation.
 - Added structural checks, mocked API authentication tests, and PostgreSQL 17 migration/privilege smoke tests.
 
 ## Latest verification
 
-GitHub Actions run [#38069291314](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38069291314) passed on 2026-10-10:
+GitHub Actions run [#38070767672](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38070767672) passed on 2026-10-10:
 - Browser JavaScript syntax: passed.
 - Netlify function syntax: passed.
 - Structural frontend checks: passed.
@@ -45,4 +45,4 @@ These are meaningful automated checks, but they do not establish that the app wo
 - [Security and implementation work order](security-implementation-plan.md)
 - [Server function environment setup and limitations](../netlify/functions/README.md)
 - [Supabase migration notes](../supabase/README.md)
-- [Latest passing CI run](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38069291314)
+- [Latest passing CI run](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38070767672)
