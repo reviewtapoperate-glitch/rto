@@ -16,12 +16,12 @@ Production remains on `main`. This branch is a review candidate, not a productio
 
 ## Latest verification
 
-GitHub Actions run [#38068272240](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38068272240) passed on 2026-10-10:
+GitHub Actions run [#38069291314](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38069291314) passed on 2026-10-10:
 - Browser JavaScript syntax: passed.
 - Netlify function syntax: passed.
 - Structural frontend checks: passed.
-- Mocked server API authentication checks: passed.
-- All six forward migrations applied twice to a disposable PostgreSQL 17 fixture: passed. The clean-install baseline plus all six migrations is now also tested on a second disposable database.
+- Mocked server API checks for authentication, owner/admin authorization, review authorship, booking isolation/validation, and image upload/delete: passed.
+- All six forward migrations applied twice to a disposable PostgreSQL 17 fixture: passed. The clean-install baseline plus all six migrations also passed twice on a second disposable database.
 - Fixture assertions for RLS enablement and removal of direct client table privileges: passed.
 
 These are meaningful automated checks, but they do not establish that the app works against the actual Supabase schema, that Supabase Storage behaves correctly after the lockdown, or that every end-to-end user journey passes.
@@ -45,4 +45,4 @@ These are meaningful automated checks, but they do not establish that the app wo
 - [Security and implementation work order](security-implementation-plan.md)
 - [Server function environment setup and limitations](../netlify/functions/README.md)
 - [Supabase migration notes](../supabase/README.md)
-- [Latest passing CI run](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38068272240)
+- [Latest passing CI run](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38069291314)
