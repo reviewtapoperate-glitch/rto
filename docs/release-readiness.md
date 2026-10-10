@@ -32,5 +32,5 @@ These are not solved by a file split and must not be treated as passed:
 - Source used: production `main` `index.html` at blob SHA `66a892c7c6b733dd6ded598e2686ac2fef0ae5bd`.
 - Visual CSS rules were extracted as-is; no redesign was requested or introduced.
 - The app remains a static frontend using the existing Supabase JS and QRCodeJS CDN dependencies.
-- The workflow now has two jobs: frontend syntax/structural checks and disposable PostgreSQL migration smoke checks. Report actual run status before claiming success.
+- GitHub Actions run [#38065594371](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38065594371) completed successfully on 2026-10-10: `static-checks` passed (Node syntax and structural smoke checks), and `database-migration-smoke` passed (PostgreSQL 17 fixture, both migrations applied twice, expected schema assertions passed). This validates only the checks described above; it is not a full application or production-schema test.
 - No production database, production deployment, or `main` branch code was changed by the candidate work.
