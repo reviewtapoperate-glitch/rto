@@ -5,6 +5,15 @@ const SUPABASE_URL = "https://ptmznpjsgdkasvywufcx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg";
 const ADMIN_PASSCODE = "RTO2026"; // change this before real use
 const CONTACT_WHATSAPP = "254700000000"; // your real WhatsApp number — replace before going live
+const IS_NETLIFY_PREVIEW = location.hostname.includes("--reviewtapoperate.netlify.app") || location.hostname.startsWith("deploy-preview-");
+function blockPreviewWrite(message = "This action is disabled in the verification preview. Use a separate staging database for functional testing.") {
+  if (!IS_NETLIFY_PREVIEW) return false;
+  toast(message);
+  return true;
+}
+function renderPreviewAccessNotice(message) {
+  app.innerHTML = `<div class="center-screen"><div class="wrap" style="max-width:420px;"><div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div><div class="card"><h2 style="margin-top:0;">Verification preview</h2><p class="hint" style="font-size:13px;color:var(--text);">${esc(message)}</p><p class="hint">This preview is connected to the production Supabase project. Privileged screens are disabled here to prevent accidental production changes.</p><a class="btn" href="/">Return to preview home</a></div></div></div>`;
+}
 
 const configured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
 let libsLoaded = true;
@@ -105,6 +114,8 @@ function renderMemberAuthTab(tab){
   }
 }
 async function doMemberSignup(){
+  if (blockPreviewWrite("Member sign-up is disabled in the verification preview.")) return;
+
   const name = document.getElementById("ma_name").value.trim();
   const phone = document.getElementById("ma_phone2").value.trim();
   if (!name || !phone) { toast("Enter your name and phone"); return; }
@@ -124,6 +135,8 @@ async function doMemberSignup(){
   if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
 }
 async function doMemberLogin(){
+  if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
+
   const phone = document.getElementById("ma_phone").value.trim();
   const code = document.getElementById("ma_code").value.trim().toUpperCase();
   if (!phone || !code) { toast("Enter your phone and access code"); return; }
@@ -196,6 +209,8 @@ function renderStarPicker(){
 }
 function setRating(i){ window.__currentRating = i; renderStarPicker(); }
 async function submitReview(slugValue){
+  if (blockPreviewWrite("Review submissions are disabled in the verification preview.")) return;
+
   const member = getMemberSession();
   if (!member) { toast("Please sign in first"); return; }
   const rating = window.__currentRating || 0;
@@ -258,6 +273,8 @@ function showBookingForm(slugValue, businessName, guidelines){
     </div>`);
 }
 async function submitBooking(slugValue, businessName, guidelinesRequired){
+  if (blockPreviewWrite("Booking submissions are disabled in the verification preview.")) return;
+
   if (guidelinesRequired) {
     const agreeBox = document.getElementById("bk_agree");
     if (!agreeBox || !agreeBox.checked) { toast("Please confirm you've read the booking guidelines"); return; }
@@ -361,6 +378,8 @@ async function loadBookingsInbox(slugValue, businessName){
     </div>`).join("");
 }
 async function setBookingStatus(id, status, slugValue, businessName){
+  if (blockPreviewWrite("Booking changes are disabled in the verification preview.")) return;
+
   const { error } = await sb.from("bookings").update({ status }).eq("id", id);
   if (error) { toast("Couldn't update: " + error.message); return; }
   loadBookingsInbox(slugValue, businessName);
@@ -435,6 +454,8 @@ function extractStoragePath(url){
   return url.slice(idx + marker.length);
 }
 async function deleteFromStorage(url){
+  if (blockPreviewWrite("Image deletion is disabled in the verification preview.")) return;
+
   const path = extractStoragePath(url);
   if (!path) return;
   try { await sb.storage.from(BUCKET).remove([path]); } catch(e) { /* best-effort */ }
@@ -514,6 +535,8 @@ function legacySocialSeed(existing){
    Never shown anywhere on the public tap page.
    ============================================================ */
 function logEvent(slugValue, type, label){
+  if (IS_NETLIFY_PREVIEW) return;
+
   if (!sb) return;
   try { sb.from("page_events").insert({ slug: slugValue, event_type: type, link_label: label || null }); } catch(e) { /* best-effort, never blocks the visitor */ }
 }
@@ -967,6 +990,8 @@ function renderSetupNeeded(){
    landing page logo, or an already-active admin session.
    ============================================================ */
 function renderAdminGate(){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative access is disabled in this verification preview."); return; }
+
   if (sessionStorage.getItem("rto_admin") === "1") return renderDashboard();
   app.innerHTML = `
     <div class="center-screen">
@@ -983,6 +1008,8 @@ function renderAdminGate(){
   document.getElementById("pass").addEventListener("keydown", e => { if(e.key==="Enter") checkPass(); });
 }
 function checkPass(){
+  if (blockPreviewWrite("Admin access is disabled in the verification preview.")) return;
+
   const v = document.getElementById("pass").value;
   if (v === ADMIN_PASSCODE) { sessionStorage.setItem("rto_admin","1"); renderDashboard(); }
   else toast("Wrong passcode");
@@ -1041,6 +1068,8 @@ async function loadCustomerList(){
 }
 function copyLink(s){ navigator.clipboard.writeText(tapLink(s)); toast("Tap link copied"); }
 async function deleteCustomer(s){
+  if (blockPreviewWrite("Customer deletion is disabled in the verification preview.")) return;
+
   if (!confirm("Delete this customer's whole page? This can't be undone.")) return;
   const c = __rtoCustomers.find(x => x.slug === s);
   if (c) {
@@ -1380,6 +1409,8 @@ function autoSlug(){
 document.addEventListener("input", e => { if (e.target && e.target.id === "f_slug") slugTouched = true; });
 
 async function uploadImage(fileInputId, slugValue, tag){
+  if (blockPreviewWrite("Image uploads are disabled in the verification preview.")) return null;
+
   const input = document.getElementById(fileInputId);
   const file = input && input.files[0];
   if (!file) return null;
@@ -1391,6 +1422,8 @@ async function uploadImage(fileInputId, slugValue, tag){
 }
 
 async function saveCustomer(){
+  if (blockPreviewWrite("Customer edits are disabled in the verification preview.")) return;
+
   const name = document.getElementById("f_name").value.trim();
   const slugValue = slugify(document.getElementById("f_slug").value);
   const bizTypeCheck = document.getElementById("f_biztype").value;
@@ -1768,6 +1801,8 @@ function closeOwnerModal(){ const m = document.getElementById("ownerModal"); if 
    OWNER PORTAL — a business's own private, restricted access
    ============================================================ */
 async function renderOwnerGate(slugValue){
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Owner editing is disabled in this verification preview."); return; }
+
   app.innerHTML = `<div class="center-screen"><p class="muted">Loading…</p></div>`;
   const { data, error } = await sb.from("customers").select("*").eq("slug", slugValue).maybeSingle();
   if (error || !data) {
@@ -1793,6 +1828,8 @@ async function renderOwnerGate(slugValue){
   window.__ownerGateRecord = data;
 }
 function checkOwnerCode(slugValue){
+  if (blockPreviewWrite("Owner access is disabled in the verification preview.")) return;
+
   const entered = document.getElementById("ownerCode").value.trim().toUpperCase();
   const data = window.__ownerGateRecord;
   if (!data || !data.owner_code) {
