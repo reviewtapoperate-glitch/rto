@@ -1,9 +1,7 @@
 /* ============================================================
    1. CONFIG
    ============================================================ */
-const SUPABASE_URL = "https://ptmznpjsgdkasvywufcx.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg";
-const CONTACT_WHATSAPP = "254700000000"; // your real WhatsApp number — replace before going live
+const CONTACT_WHATSAPP = "254700000000"; // confirm the business contact number before release
 const IS_NETLIFY_PREVIEW = location.hostname.includes("--reviewtapoperate.netlify.app") || location.hostname.startsWith("deploy-preview-");
 function blockPreviewWrite(message = "This action is disabled in the verification preview. Use a separate staging database for functional testing.") {
   if (!IS_NETLIFY_PREVIEW) return false;
@@ -14,16 +12,9 @@ function renderPreviewAccessNotice(message) {
   app.innerHTML = `<div class="center-screen"><div class="wrap" style="max-width:420px;"><div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div><div class="card"><h2 style="margin-top:0;">Verification preview</h2><p class="hint" style="font-size:13px;color:var(--text);">${esc(message)}</p><p class="hint">This preview is connected to the production Supabase project. Privileged screens are disabled here to prevent accidental production changes.</p><a class="btn" href="/">Return to preview home</a></div></div></div>`;
 }
 
-const configured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
-let libsLoaded = true;
-let sb = null;
-if (configured) {
-  if (typeof supabase === "undefined" || !supabase.createClient) {
-    libsLoaded = false;
-  } else {
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-}
+const configured = true; // database access is server-side through Netlify Functions
+const libsLoaded = typeof QRCode !== "undefined";
+const sb = null;
 const BUCKET = "rto-photos";
 
 const app = document.getElementById("app");
