@@ -27,3 +27,8 @@ Neither migration has been applied to the connected production project by this c
 GitHub Actions runs `tests/sql/migration-smoke.sh` against a disposable PostgreSQL 17 service container. The script creates only minimal `customers` and `bookings` fixture tables, applies both additive migrations, reapplies them to check idempotency, and asserts expected columns/types/nullability/defaults.
 
 **Scope limitation:** this is a migration syntax/contract smoke test, not a copy of the RTO production schema. It does not test Supabase Auth, Storage, RLS policies, grants, production constraints, or application end-to-end behavior. The fixture must not be mistaken for the missing full database baseline.
+
+
+## Current CI coverage
+
+GitHub Actions run [#38067037973](https://github.com/reviewtapoperate-glitch/rto/actions/runs/38067037973) passed on 2026-10-10. It checks browser JavaScript syntax, structural frontend smoke checks, and all three additive migrations on a disposable PostgreSQL 17 fixture, applying each migration twice. This remains a small-fixture test; it is not a complete production schema baseline, Supabase RLS/security test, or browser end-to-end suite.
