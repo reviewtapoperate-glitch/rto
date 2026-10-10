@@ -6,18 +6,18 @@
 
 - [ ] Record GitHub branch and commit SHA.
 - [ ] Record Netlify production deploy ID, state, branch, commit SHA, build/publish settings, and deploy URL.
-- [ ] Confirm Supabase project ref and inspect current schema, constraints, indexes, RLS policies, grants, storage policies, functions, triggers, and Realtime publication.
+- [ ] Confirm Supabase project ref and inspect current schema, constraints, indexes, RLS policies, grants, storage policies, functions, triggers, and Realtime publication. Latest read-only audit (2026-10-10) confirmed broad unconditional public policies/grants, public storage inserts without size/MIME limits, `customers` in `supabase_realtime`, and callable execute ACL entries on `rls_auto_enable()`; see `docs/architecture.md`.
 - [ ] Confirm no production writes/migrations are part of the test unless explicitly approved.
 - [ ] Use a preview/staging project and test accounts where possible; do not use real customer data for destructive tests.
 
 ## Schema and migration checks
 
 - [ ] Compare every field written by `saveCustomer()` with `public.customers`; currently observed mismatches include `address` and `maps_url`.
-- [ ] Verify the `reviews` table has the intended uniqueness rule for `(business_slug, member_id)` before relying on its upsert.
+- [ ] Preserve the currently verified unique index `reviews_business_slug_member_id_key` on `(business_slug, member_id)`; test review submission end to end before calling it working.
 - [ ] Reconcile `ENABLE_SCHEDULE_AND_BOOKING_LABEL.sql` with the live schema and migration listing; do not run it blindly.
 - [ ] For every approved migration, verify preconditions, apply only to the intended environment, inspect the resulting columns/constraints/indexes/policies, and record the result.
 - [ ] Test migration recovery/rollback approach before a production migration; do not invent a rollback that loses user data.
-- [ ] Confirm foreign-key indexes and add only after checking for an equivalent existing index.
+- [ ] Current live index inventory shows no leading indexes for `bookings.business_slug`, `bookings.member_id`, `page_events.slug`, or `reviews.member_id`. Recheck before any index migration; note that the unique index on `reviews(business_slug, member_id)` does not lead with `member_id`.
 
 ## Security tests — test both allow and deny
 
