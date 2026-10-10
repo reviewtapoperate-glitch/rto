@@ -470,10 +470,9 @@ function extractStoragePath(url){
 }
 async function deleteFromStorage(url){
   if (blockPreviewWrite("Image deletion is disabled in the verification preview.")) return;
-
   const path = extractStoragePath(url);
   if (!path) return;
-  try { await sb.storage.from(BUCKET).remove([path]); } catch(e) { /* best-effort */ }
+  try { await rtoApi("delete-image", { path, slug: path.split("/")[0] }); } catch(e) { /* best-effort */ }
 }
 
 /* ============================================================
@@ -1431,17 +1430,25 @@ function autoSlug(){
 }
 document.addEventListener("input", e => { if (e.target && e.target.id === "f_slug") slugTouched = true; });
 
+async async function rtoUploadFile(file, slugValue, tag){
+  if (!file) return null;
+  if (file.size > 3 * 1024 * 1024) throw new Error("Images must be 3 MB or smaller.");
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.readAsDataURL(file);
+  });
+  const result = await rtoApi("upload-image", { slug: slugValue, tag, filename: file.name, dataUrl });
+  return result.publicUrl;
+}
 async function uploadImage(fileInputId, slugValue, tag){
   if (blockPreviewWrite("Image uploads are disabled in the verification preview.")) return null;
-
   const input = document.getElementById(fileInputId);
   const file = input && input.files[0];
   if (!file) return null;
-  const path = `${slugValue}/${tag}-${Date.now()}-${file.name}`;
-  const { error } = await sb.storage.from(BUCKET).upload(path, file, { upsert:true });
-  if (error) { toast("Photo upload failed: " + error.message); return null; }
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  try { return await rtoUploadFile(file, slugValue, tag); }
+  catch (error) { toast("Photo upload failed: " + error.message); return null; }
 }
 
 async function saveCustomer(){
@@ -1465,14 +1472,10 @@ async function saveCustomer(){
     const row = portfolioRows[i];
     let imageUrl = row.existingUrl;
     if (row.newFile) {
-      const path = `${slugValue}/portfolio-${i}-${Date.now()}-${row.newFile.name}`;
-      const { error: upErr } = await sb.storage.from(BUCKET).upload(path, row.newFile, { upsert:true });
-      if (upErr) { toast("A portfolio photo failed to upload: " + upErr.message); }
-      else {
-        const { data: pubData } = sb.storage.from(BUCKET).getPublicUrl(path);
+      try {
+        imageUrl = await rtoUploadFile(row.newFile, slugValue, "portfolio-" + i);
         if (row.existingUrl) deletedPortfolioUrls.push(row.existingUrl);
-        imageUrl = pubData.publicUrl;
-      }
+      } catch (upErr) { toast("A portfolio photo failed to upload: " + upErr.message); }
     }
     if (imageUrl || (row.caption && row.caption.trim())) {
       finalPortfolio.push({ image_url: imageUrl || null, caption: (row.caption || "").trim() });
