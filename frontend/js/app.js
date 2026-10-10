@@ -765,8 +765,8 @@ async function resolveUniqueSlug(base){
   let candidate = base || "business";
   let suffix = 1;
   for (let i = 0; i < 20; i++) {
-    const { data } = await sb.from("customers").select("slug").eq("slug", candidate).maybeSingle();
-    if (!data) return candidate;
+    const exists = await rtoApi("slug-exists", { slug: candidate });
+    if (!exists.exists) return candidate;
     suffix++;
     candidate = base + "-" + suffix;
   }
@@ -876,7 +876,8 @@ async function doSearch(){
   holder.innerHTML = `<p class="muted">Searching…</p>`;
 
   if (!__searchCache) {
-    const { data, error } = await sb.from("customers").select("*").eq("listed_in_directory", true);
+    let data; let error = null;
+    try { data = (await rtoApi("directory")).customers || []; } catch (e) { error = e; data = []; }
     if (error) { holder.innerHTML = `<p class="muted">Couldn't search: ${esc(error.message)}</p>`; return; }
     __searchCache = data || [];
   }
@@ -1056,7 +1057,8 @@ async function loadCustomerList(){
   if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative customer data is disabled in this verification preview."); return; }
 
   const holder = document.getElementById("listHolder");
-  const { data, error } = await sb.from("customers").select("*").order("created_at",{ascending:false});
+  let data; let error = null;
+  try { data = (await rtoApi("admin-customers-list")).customers || []; } catch (e) { error = e; data = []; }
   if (error) { holder.innerHTML = `<p class="muted">Couldn't load customers: ${esc(error.message)}</p>`; return; }
   __rtoCustomers = data;
   if (!data.length) { holder.innerHTML = `<p class="muted">No customers yet — add your first one above.</p>`; return; }
@@ -1893,7 +1895,8 @@ function renderOwnerEditor(c){
    ============================================================ */
 async function renderPublicProfile(s){
   app.innerHTML = `<div class="center-screen"><p class="muted">Loading…</p></div>`;
-  const { data, error } = await sb.from("customers").select("*").eq("slug", s).maybeSingle();
+  let data; let error = null;
+  try { data = (await rtoApi("public-customer", { slug: s })).customer || null; } catch (e) { error = e; data = null; }
   if (error || !data) {
     app.innerHTML = `<div class="center-screen"><div style="text-align:center;"><p style="font-weight:700;">Profile not found</p><p class="muted">This tap link isn't set up yet.</p></div></div>`;
     return;
