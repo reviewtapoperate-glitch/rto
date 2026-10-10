@@ -28,5 +28,8 @@ assert.match(js, /renderAdminGate/, "admin route must remain present");
 assert.match(js, /submitBooking/, "booking flow must remain present");
 assert.match(js, /submitReview/, "review flow must remain present");
 assert.match(js, /subscribeToLiveUpdates/, "Realtime subscription code must remain present");
+assert.match(js, /IS_NETLIFY_PREVIEW/, "preview deployment must be detected");
+assert.match(js, /Member sign-up is disabled in the verification preview/, "preview must block member writes");
+assert.match(js, /Customer edits are disabled in the verification preview/, "preview must block customer edits");
 
 console.log("RTO structural smoke checks passed. This does not certify authorization or end-to-end runtime behavior.");
