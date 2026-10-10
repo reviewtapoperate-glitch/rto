@@ -54,7 +54,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
-      - name: Test additive migrations on disposable PostgreSQL
+      - name: Test forward migrations on disposable PostgreSQL
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/rto_test
+          PGPASSWORD: postgres
         run: bash tests/sql/migration-smoke.sh
+      - name: Test clean-install baseline on a second disposable database
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/rto_baseline_test
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -p 5432 -U postgres rto_baseline_test
+          bash tests/sql/baseline-smoke.sh
