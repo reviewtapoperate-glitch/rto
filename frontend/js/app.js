@@ -643,7 +643,7 @@ try {
   } else if (editSlug) {
     renderOwnerGate(editSlug);
   } else if (sessionStorage.getItem("rto_admin") === "1") {
-    renderDashboard();
+    renderAdminGate();
   } else {
     renderLanding("home");
   }
@@ -1072,7 +1072,7 @@ async function loadCustomerList(){
       <div style="display:flex;gap:2px;flex-wrap:wrap;">
         <button class="icon-btn" title="Preview" onclick="window.open(tapLink('${c.slug}'),'_blank')">&#128065;</button>
         <button class="icon-btn" title="Edit" onclick="editCustomer('${c.slug}')">&#9998;</button>
-        <button class="icon-btn" title="Owner access" onclick="showOwnerAccessModal('${c.slug}')">&#128272;</button>
+        <button class="icon-btn" title="Issue/reset owner code" onclick="showOwnerAccessModal('${c.slug}')">&#128272;</button>
         <button class="icon-btn" title="Analytics" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128202;</button>
         <button class="icon-btn" title="Bookings" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128197;</button>
         <button class="icon-btn" title="Copy link" onclick="copyLink('${c.slug}')">&#128279;</button>
@@ -1867,7 +1867,7 @@ function renderOwnerEditor(c){
     <div class="wrap">
       <div class="top-bar">
         <div class="brand" style="margin:20px 0 0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
-        <button class="icon-btn" title="Log out" onclick="renderLanding('home')">&#8630;</button>
+        <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
       <div class="card" style="margin:16px 0;">
         <p style="font-weight:700;margin:0 0 4px;">Your page</p>
