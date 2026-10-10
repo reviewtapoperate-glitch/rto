@@ -59,13 +59,16 @@ BEGIN
           OR COALESCE(with_check, '') ILIKE '%rto-photos%'
           OR policyname ILIKE '%rto-photos%'
         )
+        AND cmd IN ('INSERT', 'UPDATE', 'DELETE')
     LOOP
       EXECUTE format('DROP POLICY %I ON storage.objects', policy_row.policyname);
     END LOOP;
-    REVOKE ALL PRIVILEGES ON TABLE storage.objects FROM PUBLIC, anon, authenticated;
+    REVOKE INSERT, UPDATE, DELETE ON TABLE storage.objects FROM PUBLIC, anon, authenticated;
+    GRANT SELECT ON TABLE storage.objects TO anon, authenticated;
   END IF;
 
   IF to_regclass('storage.buckets') IS NOT NULL THEN
-    REVOKE ALL PRIVILEGES ON TABLE storage.buckets FROM PUBLIC, anon, authenticated;
+    REVOKE INSERT, UPDATE, DELETE ON TABLE storage.buckets FROM PUBLIC, anon, authenticated;
+    GRANT SELECT ON TABLE storage.buckets TO anon, authenticated;
   END IF;
 END $$;
