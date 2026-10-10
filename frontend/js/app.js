@@ -1927,15 +1927,16 @@ function scrollToAnchorIfPresent(){
    page open, it refreshes on its own within a second or two — no reload
    needed. Requires realtime enabled on the customers table (see setup SQL). */
 function subscribeToLiveUpdates(slugValue){
-  if (window.__rtoChannel) {
-    try { sb.removeChannel(window.__rtoChannel); } catch(e) { /* ignore */ }
-  }
-  window.__rtoChannel = sb
-    .channel("public-profile-" + slugValue)
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "customers", filter: `slug=eq.${slugValue}` }, (payload) => {
-      if (payload && payload.new) renderPublicProfileData(payload.new);
-    })
-    .subscribe();
+  if (window.__rtoRefreshTimer) clearInterval(window.__rtoRefreshTimer);
+  // Poll the server-authorized public endpoint instead of subscribing directly
+  // to the raw customers table, which contains private owner credential fields.
+  window.__rtoRefreshTimer = setInterval(async () => {
+    if (!document.body.contains(app) || !new URLSearchParams(window.location.search).get("c")) return;
+    try {
+      const result = await rtoApi("public-customer", { slug: slugValue });
+      if (result.customer) renderPublicProfileData(result.customer);
+    } catch(e) { /* keep the last rendered profile when the network is unavailable */ }
+  }, 30000);
 }
 
 function renderPublicProfileData(c){
