@@ -1,4 +1,4 @@
-name: RTO frontend checks
+name: RTO frontend and database checks
 
 on:
   pull_request:
@@ -24,3 +24,31 @@ jobs:
         run: node --check frontend/js/app.js
       - name: Run structural smoke checks
         run: node tests/smoke-check.mjs
+
+  database-migration-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rto_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rto_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Test additive migrations on disposable PostgreSQL
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/rto_test
+        run: bash tests/sql/migration-smoke.sh
