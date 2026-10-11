@@ -113,7 +113,7 @@ export async function handleRtoApi(request, context) {
     }
     if (action === "admin-login") {
       const expected = env("RTO_ADMIN_PASSWORD");
-      if (!expected || expected.length < 16) return json({ error: "Admin authentication is not configured securely." }, 503);
+      if (!expected || expected.length < 16) return json({ error: "Admin sign-in is not configured yet. In Netlify, set the production environment variable RTO_ADMIN_PASSWORD to a strong password of at least 16 characters, make it available to Functions, then redeploy." }, 503);
       const password = String(body?.password || "");
       if (!constantTimeEqual(password, expected)) return json({ error: "Incorrect admin passcode." }, 401);
       const token = await makeSession({ role: "admin" }, sessionSecret);
