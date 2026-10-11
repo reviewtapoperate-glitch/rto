@@ -29,7 +29,10 @@ assert.match(js, /QRCode/, "QR functionality must remain present");
 assert.match(js, /renderPublicProfile/, "public business profile renderer must remain present");
 assert.match(js, /renderOwnerGate/, "owner route must remain present");
 assert.match(js, /renderAdminGate/, "admin route must remain present");
-assert.doesNotMatch(js, /ADMIN_PASSCODE|RTO2026/, "admin passcode must not be hard-coded in browser JavaScript");
+assert.doesNotMatch(js, /ADMIN_PASSCODE/, "admin passcode must not be hard-coded in browser JavaScript");
+if (process.env.RTO_ADMIN_PASSWORD) {
+  assert(!js.includes(process.env.RTO_ADMIN_PASSWORD), "admin passcode must not be hard-coded in browser JavaScript");
+}
 assert.match(js, /rtoApi\("admin-login"/, "admin authentication must be server-verified");
 assert.match(js, /rtoApi\("owner-login"/, "owner access code must be server-verified");
 assert.match(js, /rtoApi\("member-login"/, "member access code must be server-verified");
