@@ -185,5 +185,5 @@ test("frontend restores server session and the selected top-level view after ref
   assert.match(app, /async function bootstrapApp\(\)/);
   assert.match(app, /rtoApi\("session"\)/);
   assert.match(app, /rto_current_view/);
-  assert.match(app, /auth\.session\.role === "owner" && auth\.session\.slug === editSlug/);
+  assert.match(app, /auth\.session\?\.role === "owner" && auth\.session\.slug === editSlug/);
 });
