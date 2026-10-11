@@ -27,10 +27,16 @@ Scope the secret variables to Functions runtime. After configuring them, trigger
 
 The endpoint has an IP rate-limit configuration. Non-production deploy contexts block privileged and write actions server-side; preview UI guards alone are not relied on. No CORS wildcard is added; it is intended to be called same-origin by the site.
 
-## Important incomplete migration boundary
+## Production migration and authorization boundary
 
-This is the first authentication implementation stage, not the finished authorization migration. The existing browser code still performs some direct Supabase data operations, and the live database currently has overly permissive policies. Until every privileged read/write has been moved behind authorization-checked endpoints (or properly scoped RLS), and the policies/grants are tightened and tested in a non-production database, this function alone does **not** make the database secure.
+The candidate browser code routes table reads and writes through the same-origin Netlify API; it must not use a Supabase service-role key or query tables directly from the browser. The live Supabase database has historically permissive public policies, so the API layer alone is not sufficient until the forward security migration is applied and verified.
 
-Migration `202610100004_hash_access_codes.sql` adds hash columns and allows the legacy member code to be cleared after successful login. Existing plaintext codes are upgraded lazily when a user signs in. The migration has not been applied to production. Do not treat the endpoint as production-ready until the migration and full authorization/policy work are complete.
+Release order matters:
+1. Apply and verify the additive schema/credential migrations against the current live schema, preserving all existing customer/member/review rows.
+2. Deploy this API and frontend to production and verify public profiles, owner/admin/member sign-in, profile edits, reviews, bookings, analytics, and image upload/delete.
+3. Only then apply `202610100005_lock_direct_client_data_access.sql`, which removes direct client table writes and old permissive policies. Verify server-role access and public profile/image reads immediately afterwards.
+4. Run Supabase security advisors and the production smoke checks. Do not claim the database is secured until the grants, policies, and function privileges are verified.
 
-Never configure a service-role key for a public browser environment. Do not apply security-policy migrations directly to production before the full end-to-end migration plan passes.
+Migration `202610100004_hash_access_codes.sql` adds keyed-hash columns and allows legacy member codes to be cleared after a successful login. Existing credentials are upgraded lazily, so this migration must be applied before member signup/login flows are relied on in production. The legacy `rls_auto_enable()` event-trigger function must not be callable through the exposed API; the security migration revokes its execution from public client roles.
+
+Never configure a service-role key for a public browser environment. Never run the security migration before the server-backed production deployment is live and verified.
