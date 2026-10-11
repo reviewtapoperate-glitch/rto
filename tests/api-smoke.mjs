@@ -17,12 +17,14 @@ const customer = {
   owner_code: "OWNER123",
   owner_code_hash: null,
   created_at: "2026-01-01T00:00:00Z",
-  listed_in_directory: true
+  listed_in_directory: true,
+  booking_enabled: true
 };
 const members = [];
 const reviews = [];
 const bookings = [];
 const events = [];
+const resetRequests = [];
 const calls = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(String(input));
@@ -63,10 +65,38 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === "/rest/v1/bookings" && method === "DELETE") return Response.json([]);
   if (url.pathname === "/rest/v1/page_events" && method === "POST") { const row = { id: events.length + 1, ...body }; events.push(row); return Response.json([row], { status: 201 }); }
   if (url.pathname === "/rest/v1/page_events" && method === "GET") return Response.json(events);
+  if (url.pathname === "/rest/v1/rpc/rto_system_analytics" && method === "POST") return Response.json({
+    businesses: 1, listedBusinesses: 1, members: members.length, bookings: bookings.length,
+    pendingBookings: bookings.filter(row => row.status === "pending").length, eventCount: events.length,
+    sourceCounts: Object.fromEntries([...new Set(events.map(row => row.source || "unknown"))].map(source => [source, events.filter(row => (row.source || "unknown") === source).length])),
+    eventCounts: { view: events.filter(row => row.event_type === "view").length, click: events.filter(row => row.event_type === "click").length }
+  });
+  if (url.pathname === "/rest/v1/access_code_reset_requests" && method === "POST") {
+    const row = { id: resetRequests.length + 1, created_at: "2026-01-01T00:00:00Z", ...body };
+    resetRequests.push(row);
+    return Response.json([row], { status: 201 });
+  }
+  if (url.pathname === "/rest/v1/access_code_reset_requests" && method === "GET") {
+    const id = url.searchParams.get("id")?.replace("eq.", "");
+    const status = url.searchParams.get("status")?.replace("eq.", "");
+    return Response.json(resetRequests.filter(row => (!id || String(row.id) === id) && (!status || row.status === status)));
+  }
+  if (url.pathname === "/rest/v1/access_code_reset_requests" && method === "PATCH") {
+    const id = url.searchParams.get("id")?.replace("eq.", "");
+    const row = resetRequests.find(item => String(item.id) === id);
+    if (row) Object.assign(row, body);
+    return Response.json(row ? [row] : []);
+  }
   if (url.pathname === "/rest/v1/members" && method === "POST") {
     const created = { id: "member-test-id", ...body, created_at: "2026-01-01T00:00:00Z" };
     members.push(created);
     return Response.json([created], { status: 201 });
+  }
+  if (url.pathname === "/rest/v1/members" && method === "PATCH") {
+    const id = url.searchParams.get("id")?.replace("eq.", "");
+    const row = members.find(m => String(m.id) === id);
+    if (row) Object.assign(row, body);
+    return Response.json(row ? [row] : []);
   }
   if (url.pathname === "/rest/v1/members" && method === "GET") {
     const phone = url.searchParams.get("phone")?.replace("eq.", "");
@@ -107,6 +137,9 @@ const adminCookie = sessionCookie(adminLogin);
 assert.match(adminLogin.headers.get("set-cookie"), /HttpOnly; Secure; SameSite=Lax/);
 const adminSession = await call("session", {}, adminCookie);
 assert.equal((await adminSession.json()).session.role, "admin");
+const systemAnalytics = await call("admin-system-analytics", {}, adminCookie);
+assert.equal(systemAnalytics.status, 200, "administrator should be able to view platform-wide analytics");
+assert.equal((await systemAnalytics.json()).businesses, 1);
 const adminSave = await call("customer-save", { record: { slug: "demo", name: "Updated Demo", business_type: "Cafe" } }, adminCookie);
 assert.equal(adminSave.status, 200, "authenticated admin should be able to save a business");
 const authWrapperRejectsData = await authHandler(new Request("https://rto-test.netlify.app/.netlify/functions/rto-auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "customer-save" }) }), production);
@@ -143,6 +176,21 @@ assert.match(members[0].access_code_hash, /^hmac-sha256:/, "new member code must
 
 const memberLogin = await call("member-login", { phone: "254711111111", code: signupBody.accessCode });
 assert.equal(memberLogin.status, 200, "hashed member access code should authenticate");
+const resetRequest = await call("member-reset-request", { name: "Test Member", phone: "254711111111" });
+assert.equal(resetRequest.status, 200, "customer should be able to claim an access-code reset");
+assert.match((await resetRequest.json()).message, /verify account ownership/i);
+const resetQueue = await call("admin-reset-requests", {}, adminCookie);
+assert.equal(resetQueue.status, 200, "administrator should be able to view reset requests");
+const resetRow = (await resetQueue.json()).requests[0];
+assert.ok(resetRow, "matching reset request should be available to the administrator");
+const resetCodeResponse = await call("admin-member-reset", { requestId: resetRow.id }, adminCookie);
+assert.equal(resetCodeResponse.status, 200, "administrator should issue a replacement only from a pending request");
+const replacementCode = (await resetCodeResponse.json()).code;
+assert.ok(replacementCode, "replacement code should be issued once");
+assert.equal((await call("member-login", { phone: "254711111111", code: replacementCode })).status, 200, "replacement code should authenticate");
+const eventLog = await call("event-log", { slug: "demo", eventType: "view", source: "qr", label: null, referrer: "" });
+assert.equal(eventLog.status, 200);
+assert.equal(events[0].source, "qr", "event source attribution should be persisted");
 members[0].access_code = "STALE-CODE";
 const staleMemberCode = await call("member-login", { phone: "254711111111", code: "STALE-CODE" });
 assert.equal(staleMemberCode.status, 401, "legacy plaintext must not override an existing member code hash");
@@ -153,6 +201,10 @@ const reviewSubmit = await call("review-submit", { slug: "demo", rating: 5, comm
 assert.equal(reviewSubmit.status, 200, "signed-in member should submit a review through the API");
 assert.equal(reviews[0].member_id, "member-test-id", "review author must come from the signed session, not client input");
 assert.equal(reviews[0].member_name, "Test Member", "review display name must come from the member record");
+customer.booking_enabled = false;
+const disabledBooking = await call("booking-submit", { slug: "demo", name: "Booking Guest", phone: "254722222222", item: "Table" });
+assert.equal(disabledBooking.status, 409, "disabled business booking must be rejected server-side");
+customer.booking_enabled = true;
 const bookingSubmit = await call("booking-submit", { slug: "demo", name: "Booking Guest", phone: "254722222222", item: "Table", date: "2026-10-15", time: "18:00", note: "Test", member_id: "spoofed-id" });
 assert.equal(bookingSubmit.status, 201, "public visitor should submit a validated booking");
 assert.equal(bookings[0].member_id, null, "anonymous booking must not accept a spoofed member id");
