@@ -34,7 +34,8 @@ CREATE TABLE public.reviews (
 CREATE TABLE public.page_events (
   id bigint PRIMARY KEY,
   slug text NOT NULL,
-  event_type text not null default 'view'
+  event_type text not null default 'view',
+  created_at timestamptz not null default now()
 );
 SQL
 
