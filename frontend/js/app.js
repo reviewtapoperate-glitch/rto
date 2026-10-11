@@ -1229,27 +1229,29 @@ function showTrackedLinks(slugValue, name){
 async function copyTrackedUrl(url){ try { await navigator.clipboard.writeText(url); toast("Tracked link copied"); } catch { toast("Copy failed; select and copy the URL."); } }
 async function deleteCustomer(s){
   if (blockPreviewWrite("Business deletion is disabled in the verification preview.")) return;
-
   if (!confirm("Delete this business page and its associated booking, review and analytics records? This cannot be undone.")) return;
+  let auth;
+  try { auth = await rtoApi("session"); }
+  catch (error) { toast("Couldn't verify administrator session: " + error.message); return; }
+  if (!auth.authenticated || auth.session?.role !== "admin") {
+    sessionStorage.removeItem("rto_admin");
+    toast("Your administrator session has expired. Sign in again to delete a business.");
+    renderAdminGate();
+    return;
+  }
   const c = __rtoCustomers.find(x => x.slug === s);
+  let error = null;
+  try {
+    await rtoApi("customer-delete", { slug: s });
+  } catch (e) { error = e; }
+  if (error) { toast("Couldn't delete business: " + error.message); return; }
   if (c) {
     if (c.photo_url) await deleteFromStorage(c.photo_url);
     if (c.background_url) await deleteFromStorage(c.background_url);
     if (c.menu_image_url) await deleteFromStorage(c.menu_image_url);
   }
-  let error = null;
-  try {
-    const auth = await rtoApi("session");
-    if (!auth.authenticated || auth.session?.role !== "admin") {
-      sessionStorage.removeItem("rto_admin");
-      toast("Your administrator session has expired. Sign in again to delete a business.");
-      renderAdminGate();
-      return;
-    }
-    await rtoApi("customer-delete", { slug: s });
-  } catch (e) { error = e; }
-  if (error) toast("Couldn't delete business: " + error.message);
-  else { toast("Business deleted"); loadCustomerList(); }
+  toast("Business deleted");
+  loadCustomerList();
 }
 
 /* ---- New/edit customer form (shared between admin and owner) ---- */
@@ -2043,6 +2045,7 @@ function renderOwnerEditor(c){
           <button class="btn" id="saveBtn" onclick="saveCustomer()">Save changes</button>
           <a class="btn outline-cyan" href="${tapLink(c.slug)}" target="_blank" rel="noreferrer">View my public page</a>
           <button class="btn secondary" type="button" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">View my analytics</button>
+          <button class="btn secondary" type="button" onclick="showTrackedLinks('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">Tracked links</button>
           <button class="btn secondary" type="button" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">View bookings</button>
         </div>
       </div>
