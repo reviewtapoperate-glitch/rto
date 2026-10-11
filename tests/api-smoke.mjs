@@ -178,7 +178,7 @@ const memberLogin = await call("member-login", { phone: "254711111111", code: si
 assert.equal(memberLogin.status, 200, "hashed member access code should authenticate");
 const resetRequest = await call("member-reset-request", { name: "Test Member", phone: "254711111111" });
 assert.equal(resetRequest.status, 200, "customer should be able to claim an access-code reset");
-assert.match((await resetRequest.json()).message, /verify account ownership/i);
+assert.match((await resetRequest.json()).message, /replacement code/i);
 const resetQueue = await call("admin-reset-requests", {}, adminCookie);
 assert.equal(resetQueue.status, 200, "administrator should be able to view reset requests");
 const resetRow = (await resetQueue.json()).requests[0];
