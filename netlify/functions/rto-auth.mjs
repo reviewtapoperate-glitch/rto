@@ -6,6 +6,7 @@ const AUTH_ACTIONS = new Set([
   "owner-login-by-code",
   "member-signup",
   "member-login",
+  "member-reset-request",
   "business-signup",
   "admin-owner-code",
   "session",
