@@ -51,6 +51,7 @@ as $$
       from (
         select coalesce(nullif(source, ''), 'unknown') as source_name, count(*) as total
         from public.page_events
+        where event_type = 'view'
         group by coalesce(nullif(source, ''), 'unknown')
       ) sources
     ), '{}'::jsonb),
