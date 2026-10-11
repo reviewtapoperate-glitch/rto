@@ -41,6 +41,9 @@ assert.match(api, /SUPABASE_SERVICE_ROLE_KEY/, "privileged database access must 
 assert.doesNotMatch(js, /sb\.from\(/, "browser code must not query Supabase tables directly");
 assert.doesNotMatch(js, /sb\.storage/, "browser code must not mutate Storage directly");
 assert.match(api, /action === "customer-save"/, "business profile writes must pass through the API");
+assert.doesNotMatch(js, /if \(!sb\) return;/, "analytics must not depend on an undefined legacy Supabase client");
+assert.doesNotMatch(js, /254700000000/, "the public site must not ship a placeholder WhatsApp number");
+assert.match(js, /CONTACT_WHATSAPP \?/, "WhatsApp contact links must be gated until the real number is configured");
 assert.match(api, /action === "review-submit"/, "review writes must pass through the API");
 assert.match(api, /action === "booking-submit"/, "booking writes must pass through the API");
 assert.match(api, /action === "booking-status"/, "booking status changes must be authorized server-side");
