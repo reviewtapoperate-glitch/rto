@@ -57,6 +57,13 @@ assert.match(js, /submitReview/, "review flow must remain present");
 assert.match(js, /subscribeToLiveUpdates/, "Realtime subscription code must remain present");
 assert.match(js, /IS_NETLIFY_PREVIEW/, "preview deployment must be detected");
 assert.match(js, /Member sign-up is disabled in the verification preview/, "preview must block member writes");
-assert.match(js, /Customer edits are disabled in the verification preview/, "preview must block customer edits");
+assert.match(js, /Business edits are disabled in the verification preview/, "preview must block business edits");
+assert.match(js, /member-reset-request/, "customer access-code recovery must be available");
+assert.match(api, /admin-system-analytics/, "platform analytics must be server-protected");
+assert.match(js, /booking_enabled/, "booking visibility must be configurable per business");
+assert.match(api, /booking_enabled === false/, "booking requests must be blocked server-side when disabled");
+assert.match(js, /getTrafficSource/, "page events must carry tracked source attribution");
+assert.match(js, /rtoBusinessStructuredData/, "public business pages must include structured SEO data");
+assert.match(toml, /sitemap\.xml/, "public business sitemap route must be configured");
 
 console.log("RTO structural smoke checks passed. This does not certify authorization or end-to-end runtime behavior.");

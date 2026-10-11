@@ -22,7 +22,7 @@ const slug = params.get("c");
 const editSlug = params.get("edit");
 
 async function rtoApi(action, payload = {}) {
-  const authActions = new Set(["admin-login", "owner-login", "owner-login-by-code", "member-signup", "member-login", "business-signup", "admin-owner-code", "session", "logout"]);
+  const authActions = new Set(["admin-login", "owner-login", "owner-login-by-code", "member-signup", "member-login", "member-reset-request", "business-signup", "admin-owner-code", "session", "logout"]);
   const endpoint = authActions.has(action) ? "/.netlify/functions/rto-auth" : "/.netlify/functions/rto-api";
   const response = await fetch(endpoint, {
     method: "POST",
@@ -55,25 +55,56 @@ function setPageSeoTags(c){
   const titleParts = [c.name];
   if (c.title) titleParts.push(c.title);
   titleParts.push("ReviewTapOperate");
-  document.title = titleParts.join(" — ");
-
+  const title = titleParts.join(" — ");
+  document.title = title;
   const descBits = [];
   if (c.title) descBits.push(c.title);
   if (c.address) descBits.push(c.address);
   if (c.menu_items && c.menu_items.length) descBits.push(c.menu_items.slice(0,3).map(m => m.name).join(", "));
   const description = (c.name + (descBits.length ? " — " + descBits.join(" · ") : " — find contact info, reviews, and more.")).slice(0, 160);
-
-  let metaTag = document.querySelector('meta[name="description"]');
-  if (!metaTag) {
-    metaTag = document.createElement("meta");
-    metaTag.setAttribute("name", "description");
-    document.head.appendChild(metaTag);
-  }
-  metaTag.setAttribute("content", description);
+  const setMeta = (selector, attr, value) => {
+    let el = document.querySelector(selector);
+    if (!el) { el = document.createElement("meta"); el.setAttribute(attr, selector.includes("property=") ? selector.match(/property=\"([^\"]+)/)[1] : selector.match(/name=\"([^\"]+)/)[1]); document.head.appendChild(el); }
+    el.setAttribute("content", value);
+  };
+  let desc = document.querySelector('meta[name="description"]');
+  if (!desc) { desc = document.createElement("meta"); desc.name = "description"; document.head.appendChild(desc); }
+  desc.content = description;
+  const canonicalUrl = window.location.origin + window.location.pathname + "?c=" + encodeURIComponent(c.slug);
+  let canonical = document.querySelector('link[rel="canonical"]');
+  if (!canonical) { canonical = document.createElement("link"); canonical.rel = "canonical"; document.head.appendChild(canonical); }
+  canonical.href = canonicalUrl;
+  setMeta('meta[property="og:title"]', "property", title);
+  setMeta('meta[property="og:description"]', "property", description);
+  setMeta('meta[property="og:type"]', "property", "business.business");
+  setMeta('meta[property="og:url"]', "property", canonicalUrl);
+  if (c.photo_url) setMeta('meta[property="og:image"]', "property", c.photo_url);
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": c.name,
+    "url": canonicalUrl,
+    "description": description,
+    ...(c.business_type ? { "additionalType": c.business_type } : {}),
+    ...(c.phone ? { "telephone": c.phone } : {}),
+    ...(c.address ? { "address": { "@type": "PostalAddress", "streetAddress": c.address } } : {}),
+    ...(c.photo_url ? { "image": c.photo_url } : {}),
+    ...(c.maps_url ? { "hasMap": c.maps_url } : {}),
+    ...(Array.isArray(c.social_links) && c.social_links.length ? { "sameAs": c.social_links.map(x => x.value).filter(Boolean) } : {})
+  };
+  let jsonLd = document.getElementById("rtoBusinessStructuredData");
+  if (!jsonLd) { jsonLd = document.createElement("script"); jsonLd.id = "rtoBusinessStructuredData"; jsonLd.type = "application/ld+json"; document.head.appendChild(jsonLd); }
+  jsonLd.textContent = JSON.stringify(schema);
 }
 function digits(v){ return (v||"").replace(/[^\d+]/g,""); }
 function initials(name){ return (name||"?").split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
 function tapLink(s){ return window.location.origin + window.location.pathname + "?c=" + s; }
+function trackedLink(s, source, section){
+  const url = new URL(tapLink(s));
+  url.searchParams.set("src", source);
+  if (section) url.hash = section;
+  return url.toString();
+}
 
 /* ============================================================
    MEMBER ACCOUNTS — real end-customer accounts (the people tapping
@@ -101,18 +132,28 @@ function showMemberAuthModal(onSuccess){
 function renderMemberAuthTab(tab){
   const body = document.getElementById("memberAuthBody");
   if (!body) return;
-  if (tab === "login") {
+  if (tab === "forgot") {
+    body.innerHTML = `
+      <p style="font-weight:700;margin:0 0 4px;">Request an access-code reset</p>
+      <p class="hint" style="margin-bottom:14px;">Enter the same name and phone number used to register. Support will verify account ownership before issuing a replacement code.</p>
+      <div class="field" style="text-align:left;"><label>Your name</label><input id="ma_reset_name" autocomplete="name"></div>
+      <div class="field" style="text-align:left;"><label>Phone number</label><input id="ma_reset_phone" autocomplete="tel"></div>
+      <button class="btn" onclick="requestMemberAccessReset()">Submit reset request</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Back to login</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="closeMemberAuthModal()">Cancel</button>`;
+  } else if (tab === "login") {
     body.innerHTML = `
       <p style="font-weight:700;margin:0 0 4px;">Log in</p>
       <p class="hint" style="margin-bottom:14px;">Enter your phone number and access code.</p>
       <div class="field" style="text-align:left;"><label>Phone number</label><input id="ma_phone"></div>
       <div class="field" style="text-align:left;"><label>Access code</label><input id="ma_code" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace;"></div>
       <button class="btn" onclick="doMemberLogin()">Log in</button>
+      <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('forgot')">Forgot access code?</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('signup')">New here? Sign up instead</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="closeMemberAuthModal()">Cancel</button>`;
   } else {
     body.innerHTML = `
-      <p style="font-weight:700;margin:0 0 4px;">Quick sign up</p>
+      <p style="font-weight:700;margin:0 0 4px;">Customer sign up</p>
       <p class="hint" style="margin-bottom:14px;">Just your name and phone — takes seconds. We'll give you an access code to log back in anytime.</p>
       <div class="field" style="text-align:left;"><label>Your name</label><input id="ma_name"></div>
       <div class="field" style="text-align:left;"><label>Phone number</label><input id="ma_phone2"></div>
@@ -153,6 +194,17 @@ async function copyMemberAccessCode(){
 function finishMemberSignup(){
   closeMemberAuthModal();
   if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+}
+async function requestMemberAccessReset(){
+  if (blockPreviewWrite("Access-code reset requests are disabled in the verification preview.")) return;
+  const name = document.getElementById("ma_reset_name").value.trim();
+  const phone = document.getElementById("ma_reset_phone").value.trim();
+  if (!name || !phone) { toast("Enter your name and phone number"); return; }
+  try {
+    const result = await rtoApi("member-reset-request", { name, phone });
+    const body = document.getElementById("memberAuthBody");
+    if (body) body.innerHTML = `<p style="font-weight:700;">Reset request received</p><p class="hint">${esc(result.message || "If the details match an account, support will verify ownership before issuing a replacement code.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
+  } catch (error) { toast(error.message || "Couldn't submit the reset request."); }
 }
 async function doMemberLogin(){
   if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
@@ -560,10 +612,30 @@ function legacySocialSeed(existing){
    the business owner (already behind their own access code).
    Never shown anywhere on the public tap page.
    ============================================================ */
+function getTrafficSource(){
+  const explicit = (new URLSearchParams(window.location.search).get("src") || "").toLowerCase();
+  const known = new Set(["nfc","qr","link","instagram","tiktok","facebook","whatsapp","google","other","unknown"]);
+  if (known.has(explicit)) return explicit;
+  const ref = document.referrer;
+  if (!ref) return "unknown";
+  try {
+    const host = new URL(ref).hostname.toLowerCase();
+    if (host.includes("instagram")) return "instagram";
+    if (host.includes("tiktok")) return "tiktok";
+    if (host.includes("facebook") || host.includes("fb.")) return "facebook";
+    if (host.includes("whatsapp")) return "whatsapp";
+    if (host.includes("google")) return "google";
+  } catch {}
+  return "other";
+}
 function logEvent(slugValue, type, label){
   if (IS_NETLIFY_PREVIEW) return;
-
-  try { rtoApi("event-log", { slug: slugValue, eventType: type, label: label || null }).catch(() => {}); } catch(e) { /* best-effort, never blocks the visitor */ }
+  try {
+    rtoApi("event-log", {
+      slug: slugValue, eventType: type, label: label || null,
+      source: getTrafficSource(), referrer: document.referrer || ""
+    }).catch(() => {});
+  } catch(e) { /* best-effort, never blocks the visitor */ }
 }
 function renderAnalyticsModal(slugValue, name){
   const old = document.getElementById("analyticsModal");
@@ -588,10 +660,14 @@ async function loadAnalyticsData(slugValue){
   if (error) { body.innerHTML = `<p class="hint">Couldn't load analytics: ${esc(error.message)}</p>`; return; }
   const views = data.filter(e => e.event_type === "view").length;
   const clicks = data.filter(e => e.event_type === "click");
+  const sourceCounts = {};
+  data.filter(e => e.event_type === "view").forEach(e => { const source = e.source || "unknown"; sourceCounts[source] = (sourceCounts[source] || 0) + 1; });
   const counts = {};
   clicks.forEach(e => { const k = e.link_label || "Other"; counts[k] = (counts[k]||0) + 1; });
   const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
-  let html = `<div style="font-size:14px;margin-bottom:12px;"><b>${views}</b> page views &nbsp;·&nbsp; <b>${clicks.length}</b> total clicks</div>`;
+  let html = `<div style="font-size:14px;margin-bottom:12px;"><b>${views}</b> page views &nbsp;·&nbsp; <b>${clicks.length}</b> total clicks</div>
+    <p class="hint" style="margin:8px 0 6px;">Visits by tracked source</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">${Object.entries(sourceCounts).sort((a,b)=>b[1]-a[1]).map(([source,count])=>`<span style="background:var(--panel-2);border-radius:8px;padding:6px 9px;font-size:12px;">${esc(source.toUpperCase())}: <b>${count}</b></span>`).join("") || "<span class=hint>No visits recorded yet.</span>"}</div>`;
   if (sorted.length) {
     html += `<div style="display:flex;flex-direction:column;gap:6px;">` + sorted.map(([label,count]) => `
       <div style="display:flex;justify-content:space-between;background:var(--panel-2);border-radius:8px;padding:8px 12px;font-size:13px;">
@@ -723,7 +799,7 @@ function renderLanding(view){
 
       <div class="btn-row" style="margin-top:0;">
         <button class="btn" onclick="renderLanding('signup')">Get started</button>
-        <button class="btn secondary" onclick="renderLanding('login')">Business login</button>
+        <button class="btn secondary" onclick="renderLanding('login')">Business account login</button>
         <button class="btn secondary" onclick="renderLanding('search')">Find a business</button>
         <button class="btn secondary" onclick="openMyAccount()">My account</button>
       </div>
@@ -832,7 +908,7 @@ function renderLoginForm(){
     <div class="wrap" style="max-width:380px;">
       <div class="brand" style="margin-top:36px;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
       <div class="card" style="margin-top:20px;">
-        <p style="font-weight:700;margin:0 0 4px;">Business login</p>
+        <p style="font-weight:700;margin:0 0 4px;">Business account login</p>
         <p class="hint" style="margin-bottom:16px;">Enter your access code — that's all you need.</p>
         <div class="field"><label>Access code</label><input id="li_code" style="text-align:center;letter-spacing:2px;font-family:monospace;text-transform:uppercase;" placeholder="e.g. K7P2QX"></div>
         <button class="btn" id="liBtn" onclick="doLogin()">Log in</button>
@@ -1056,26 +1132,64 @@ async function renderDashboard(){
         <div class="brand" style="margin:0;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
         <button class="icon-btn" title="Log out" onclick="rtoLogout(); renderLanding('home')">&#8630;</button>
       </div>
-      <p class="muted" style="margin:0 0 18px;">Every customer's tap card, one dashboard. Works for any type of business.</p>
-      <div class="btn-row" style="margin-top:0;">
-        <button class="btn" onclick="showForm()">+ New customer</button>
+      <p class="muted" style="margin:0 0 18px;">Manage hosted business pages, customer accounts and platform activity.</p>
+      <div class="btn-row" style="margin-top:0;flex-wrap:wrap;">
+        <button class="btn" onclick="showForm()">+ New business</button>
+        <button class="btn secondary" onclick="showSystemAnalytics()">System analytics</button>
+        <button class="btn secondary" onclick="showAccessResetRequests()">Access reset requests</button>
       </div>
       <div id="formHolder"></div>
-      <div id="listHolder" class="row-list"><p class="muted">Loading customers…</p></div>
+      <div id="listHolder" class="row-list"><p class="muted">Loading businesses…</p></div>
     </div>`;
   loadCustomerList();
 }
 
 let __rtoCustomers = [];
+async function showSystemAnalytics(){
+  if (blockPreviewWrite("System analytics are disabled in the verification preview.")) return;
+  const old = document.getElementById("systemAnalyticsModal"); if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", `<div class="modal-bg" id="systemAnalyticsModal" onclick="if(event.target.id==='systemAnalyticsModal') document.getElementById('systemAnalyticsModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Platform-wide analytics</p><div id="systemAnalyticsBody"><p class="hint">Loading…</p></div><button class="btn secondary" onclick="document.getElementById('systemAnalyticsModal').remove()">Close</button></div></div>`);
+  const body = document.getElementById("systemAnalyticsBody");
+  try {
+    const d = await rtoApi("admin-system-analytics");
+    body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${[
+      ["Businesses",d.businesses],["Searchable businesses",d.listedBusinesses],["Customer accounts",d.members],["Bookings",d.bookings],["Pending bookings",d.pendingBookings],["Tracked events",d.eventCount]
+    ].map(([label,value])=>`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">${label}</div><b style="font-size:21px;">${Number(value||0).toLocaleString()}</b></div>`).join("")}</div>
+    <p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>${esc(k.toUpperCase())}</span><b>${v}</b></div>`).join("")||"<p class=hint>No traffic events yet.</p>"}
+    <p class="hint" style="margin-top:12px;">System totals are based on recorded data. Source attribution depends on tracked NFC, QR and channel-specific links. Platform totals and source breakdowns are aggregated across stored records; the recent-event list is limited for display.</p>`;
+  } catch(e) { body.innerHTML = `<p class="hint">Couldn't load system analytics: ${esc(e.message)}</p>`; }
+}
+async function showAccessResetRequests(){
+  if (blockPreviewWrite("Access reset requests are disabled in the verification preview.")) return;
+  const old = document.getElementById("resetRequestsModal"); if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", `<div class="modal-bg" id="resetRequestsModal" onclick="if(event.target.id==='resetRequestsModal') document.getElementById('resetRequestsModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Customer access-code reset requests</p><p class="hint">Verify the customer's identity using the registered contact method before issuing a replacement. The new code is displayed once.</p><div id="resetRequestsBody"><p class="hint">Loading…</p></div><button class="btn secondary" onclick="document.getElementById('resetRequestsModal').remove()">Close</button></div></div>`);
+  await loadAccessResetRequests();
+}
+async function loadAccessResetRequests(){
+  const body = document.getElementById("resetRequestsBody"); if (!body) return;
+  try {
+    const result = await rtoApi("admin-reset-requests");
+    if (!result.requests.length) { body.innerHTML = '<p class="hint">No pending reset requests.</p>'; return; }
+    body.innerHTML = result.requests.map(r=>`<div style="padding:10px;background:var(--panel-2);border-radius:10px;margin:8px 0;"><b>${esc(r.member_name||"Customer")}</b><div class="hint">${esc(r.phone)} · ${new Date(r.created_at).toLocaleString()}</div><button class="btn" style="margin-top:8px;" onclick="issueMemberResetCode('${r.id}')">Issue replacement after verification</button></div>`).join("");
+  } catch(e) { body.innerHTML = `<p class="hint">Couldn't load requests: ${esc(e.message)}</p>`; }
+}
+async function issueMemberResetCode(requestId){
+  if (!confirm("Have you independently verified that this person owns the account? Only continue after verification.")) return;
+  try {
+    const result = await rtoApi("admin-member-reset", { requestId });
+    const body = document.getElementById("resetRequestsBody");
+    if (body) body.innerHTML = `<div style="padding:12px;background:var(--panel-2);border-radius:10px;"><b>Replacement access code</b><p class="hint">Give this code to the verified customer through a private channel. It will not be shown again.</p><input readonly id="issuedResetCode" value="${esc(result.code)}" style="width:100%;font-family:monospace;font-size:18px;text-align:center;letter-spacing:2px;"><button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('issuedResetCode').value);toast('Code copied')">Copy code</button></div>`;
+  } catch(e) { toast(e.message || "Couldn't issue a replacement code."); }
+}
 async function loadCustomerList(){
-  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative customer data is disabled in this verification preview."); return; }
+  if (IS_NETLIFY_PREVIEW) { renderPreviewAccessNotice("Administrative business data is disabled in this verification preview."); return; }
 
   const holder = document.getElementById("listHolder");
   let data; let error = null;
   try { data = (await rtoApi("admin-customers-list")).customers || []; } catch (e) { error = e; data = []; }
-  if (error) { holder.innerHTML = `<p class="muted">Couldn't load customers: ${esc(error.message)}</p>`; return; }
+  if (error) { holder.innerHTML = `<p class="muted">Couldn't load businesses: ${esc(error.message)}</p>`; return; }
   __rtoCustomers = data;
-  if (!data.length) { holder.innerHTML = `<p class="muted">No customers yet — add your first one above.</p>`; return; }
+  if (!data.length) { holder.innerHTML = `<p class="muted">No businesses yet — add your first one above.</p>`; return; }
   holder.innerHTML = data.map(c => `
     <div class="row-item">
       <div class="info">
@@ -1091,28 +1205,53 @@ async function loadCustomerList(){
         <button class="icon-btn" title="Issue/reset owner code" onclick="showOwnerAccessModal('${c.slug}')">&#128272;</button>
         <button class="icon-btn" title="Analytics" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128202;</button>
         <button class="icon-btn" title="Bookings" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128197;</button>
-        <button class="icon-btn" title="Copy link" onclick="copyLink('${c.slug}')">&#128279;</button>
+        <button class="icon-btn" title="Copy tracked direct link" onclick="copyLink('${c.slug}')">&#128279;</button>
+        <button class="icon-btn" title="Tracked links for NFC, QR and social bios" onclick="showTrackedLinks('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#128203;</button>
         <button class="icon-btn" title="QR code" onclick="showQr('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">&#9642;</button>
-        <button class="icon-btn" title="Delete customer" onclick="deleteCustomer('${c.slug}')">&#128465;</button>
+        <button class="icon-btn" title="Delete business" onclick="deleteCustomer('${c.slug}')">&#128465;</button>
       </div>
     </div>
   `).join("");
 }
-function copyLink(s){ navigator.clipboard.writeText(tapLink(s)); toast("Tap link copied"); }
+async function copyLink(s){ try { await navigator.clipboard.writeText(trackedLink(s, "link")); toast("Tracked direct link copied"); } catch { toast("Couldn't copy the link. Open the page and copy its address."); } }
+function showTrackedLinks(slugValue, name){
+  const rows = [
+    ["NFC TapCard", trackedLink(slugValue, "nfc")],
+    ["QR code", trackedLink(slugValue, "qr")],
+    ["Instagram bio", trackedLink(slugValue, "instagram")],
+    ["TikTok bio", trackedLink(slugValue, "tiktok")],
+    ["WhatsApp sharing", trackedLink(slugValue, "whatsapp")],
+    ["General direct link", trackedLink(slugValue, "link")]
+  ];
+  const old = document.getElementById("trackedLinksModal"); if (old) old.remove();
+  document.body.insertAdjacentHTML("beforeend", `<div class="modal-bg" id="trackedLinksModal" onclick="if(event.target.id==='trackedLinksModal') document.getElementById('trackedLinksModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Tracked links — ${esc(name)}</p><p class="hint">Use the matching link on each channel so analytics can attribute visits correctly.</p>${rows.map(([label,url],i)=>`<div style="margin:10px 0;padding:10px;background:var(--panel-2);border-radius:8px;"><b>${esc(label)}</b><div style="font-size:11px;word-break:break-all;margin:5px 0;">${esc(url)}</div><button class="btn secondary" style="width:auto;padding:6px 10px;" onclick="copyTrackedUrl('${esc(url)}')">Copy</button></div>`).join("")}<button class="btn secondary" onclick="document.getElementById('trackedLinksModal').remove()">Close</button></div></div>`);
+}
+async function copyTrackedUrl(url){ try { await navigator.clipboard.writeText(url); toast("Tracked link copied"); } catch { toast("Copy failed; select and copy the URL."); } }
 async function deleteCustomer(s){
-  if (blockPreviewWrite("Customer deletion is disabled in the verification preview.")) return;
-
-  if (!confirm("Delete this customer's whole page? This can't be undone.")) return;
+  if (blockPreviewWrite("Business deletion is disabled in the verification preview.")) return;
+  if (!confirm("Delete this business page and its associated booking, review and analytics records? This cannot be undone.")) return;
+  let auth;
+  try { auth = await rtoApi("session"); }
+  catch (error) { toast("Couldn't verify administrator session: " + error.message); return; }
+  if (!auth.authenticated || auth.session?.role !== "admin") {
+    sessionStorage.removeItem("rto_admin");
+    toast("Your administrator session has expired. Sign in again to delete a business.");
+    renderAdminGate();
+    return;
+  }
   const c = __rtoCustomers.find(x => x.slug === s);
+  let error = null;
+  try {
+    await rtoApi("customer-delete", { slug: s });
+  } catch (e) { error = e; }
+  if (error) { toast("Couldn't delete business: " + error.message); return; }
   if (c) {
     if (c.photo_url) await deleteFromStorage(c.photo_url);
     if (c.background_url) await deleteFromStorage(c.background_url);
     if (c.menu_image_url) await deleteFromStorage(c.menu_image_url);
   }
-  let error = null;
-  try { await rtoApi("customer-delete", { slug: s }); } catch (e) { error = e; }
-  if (error) toast("Couldn't delete: " + error.message);
-  else { toast("Deleted"); loadCustomerList(); }
+  toast("Business deleted");
+  loadCustomerList();
 }
 
 /* ---- New/edit customer form (shared between admin and owner) ---- */
@@ -1127,7 +1266,7 @@ let removeFlags = { photo:false, background:false, menu:false };
 
 function editCustomer(slug){
   const c = __rtoCustomers.find(x => x.slug === slug);
-  if (!c) { toast("Couldn't find that customer"); return; }
+  if (!c) { toast("Couldn't find that business"); return; }
   showForm(c);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1222,7 +1361,11 @@ function customerFormFieldsHtml(c, existing){
 
       <div class="section-label">Booking settings</div>
       <div class="field">
-        <label>Section label shown to customers</label>
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="f_booking_enabled" ${c.booking_enabled !== false ? "checked" : ""}> Enable booking requests</label>
+        <div class="hint">When disabled, the booking action is hidden from the public page and new requests are blocked.</div>
+      </div>
+      <div class="field">
+        <label>Button label shown to visitors</label>
         <input id="f_booking_label" value="${esc(c.booking_label || "Book a visit")}" placeholder='e.g. "Book a visit" for appointments, "Order now" for products'>
         <div class="hint">This same feature works for appointments (a salon) or orders (a clothing shop) — just rename it to match what your customers are actually doing.</div>
       </div>
@@ -1236,7 +1379,7 @@ function customerFormFieldsHtml(c, existing){
       <div class="field"><label>Phone number</label><input id="f_phone" value="${esc(c.phone||"")}" placeholder="+2547XXXXXXXX"><div class="hint">Saved straight into the visitor's phone contacts. Leave blank to hide this button.</div></div>
 
       <div class="section-label">Connect buttons</div>
-      <div class="field"><label>Section label shown to customers</label><input id="f_connect_label" value="${esc(c.connect_label || "Connect")}" placeholder="e.g. Connect, Reach us, Find us"></div>
+      <div class="field"><label>Section label shown to visitors</label><input id="f_connect_label" value="${esc(c.connect_label || "Connect")}" placeholder="e.g. Connect, Reach us, Find us"></div>
       <div class="field"><label>WhatsApp number</label><input id="f_wa" value="${esc(c.whatsapp_number||"")}" placeholder="+2547XXXXXXXX"></div>
       <div class="field"><label>WhatsApp opening message</label><input id="f_wamsg" value="${esc(c.whatsapp_message||"Hi, I got your tap card!")}"></div>
       <div class="field"><label>Google review link</label><input id="f_review" value="${esc(c.google_review_url||"")}" placeholder="https://g.page/r/.../review"></div>
@@ -1247,13 +1390,13 @@ function customerFormFieldsHtml(c, existing){
       <button class="btn secondary" type="button" style="width:auto;padding:8px 14px;font-size:13px;" onclick="addSocialRow()">+ Add social link</button>
 
       <div class="section-label" style="margin-top:22px;">Payment</div>
-      <div class="field"><label>Section label shown to customers</label><input id="f_pay_label" value="${esc(c.pay_label || "Pay")}" placeholder="e.g. Pay, Payment, Send Money"></div>
+      <div class="field"><label>Section label shown to visitors</label><input id="f_pay_label" value="${esc(c.pay_label || "Pay")}" placeholder="e.g. Pay, Payment, Send Money"></div>
       <div class="field"><label>Till / Paybill number</label><input id="f_till" value="${esc(c.till_number||"")}"></div>
       <div class="field"><label>Label above it</label><input id="f_tillLabel" value="${esc(c.till_label||"M-Pesa Till Number")}"></div>
 
       <div id="menuSectionWrap">
         <div class="section-label" style="margin-top:22px;">Menu / price list (shown because this business type usually needs one)</div>
-        <div class="field"><label>Section label shown to customers</label><input id="f_menu_label" value="${esc(c.menu_label || "Menu")}" placeholder="e.g. Menu, Price List, Services"></div>
+        <div class="field"><label>Section label shown to visitors</label><input id="f_menu_label" value="${esc(c.menu_label || "Menu")}" placeholder="e.g. Menu, Price List, Services"></div>
         <p class="hint" style="margin-bottom:10px;">Two ways to do this, use either or both: upload a photo of an existing printed menu, and/or type items in manually below.</p>
         <div class="field">
           <label>Upload a menu photo</label>
@@ -1266,7 +1409,7 @@ function customerFormFieldsHtml(c, existing){
 
       <div class="section-label" style="margin-top:22px;">Gallery / portfolio (optional — name it whatever fits: Gallery, Our Work, Listings, Menu Photos…)</div>
       <div class="field">
-        <label>Section title shown to customers</label>
+        <label>Section title shown to visitors</label>
         <input id="f_portfolio_title" value="${esc(c.portfolio_title || "Recent work")}" placeholder="e.g. Recent work, Gallery, Property Listings">
       </div>
       <div id="portfolioRowsHolder"></div>
@@ -1321,7 +1464,7 @@ function showForm(existing){
   initPortfolioRows(existing);
   initSocialRows(existing);
   const c = existing || {};
-  const heading = existing ? `Editing ${esc(c.name)}` : "New customer profile";
+  const heading = existing ? `Editing ${esc(c.name)}` : "New business profile";
 
   document.getElementById("formHolder").innerHTML = `
     <div class="card" style="margin:16px 0;">
@@ -1463,7 +1606,7 @@ async function uploadImage(fileInputId, slugValue, tag){
 }
 
 async function saveCustomer(){
-  if (blockPreviewWrite("Customer edits are disabled in the verification preview.")) return;
+  if (blockPreviewWrite("Business edits are disabled in the verification preview.")) return;
 
   const name = document.getElementById("f_name").value.trim();
   const slugValue = slugify(document.getElementById("f_slug").value);
@@ -1520,6 +1663,7 @@ async function saveCustomer(){
     maps_url: document.getElementById("f_maps_url").value.trim(),
     booking_guidelines: document.getElementById("f_booking_guidelines").value.trim(),
     booking_label: document.getElementById("f_booking_label").value.trim() || "Book a visit",
+    booking_enabled: document.getElementById("f_booking_enabled").checked,
     listed_in_directory: document.getElementById("f_listed").value === "true",
     phone: document.getElementById("f_phone").value.trim(),
     whatsapp_number: document.getElementById("f_wa").value.trim(),
@@ -1769,7 +1913,7 @@ function regenerateQrModal(slugValue, name){
 }
 function drawQrCanvas(slugValue, name){
   const section = document.getElementById("qrSectionPicker").value;
-  const link = tapLink(slugValue) + (section ? "#" + section : "");
+  const link = trackedLink(slugValue, "qr", section);
   const holder = document.getElementById("qrcanvas-holder");
   holder.innerHTML = "";
   document.getElementById("qrLinkText").textContent = link;
@@ -1791,7 +1935,7 @@ function closeQr(){ const m = document.getElementById("qrModal"); if (m) m.remov
 async function showOwnerAccessModal(slug){
   if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
   const c = __rtoCustomers.find(x => x.slug === slug);
-  if (!c) { toast("Couldn't find that customer"); return; }
+  if (!c) { toast("Couldn't find that business"); return; }
   try {
     const result = await rtoApi("admin-owner-code", { slug });
     renderOwnerAccessModal({ ...c, owner_code: result.code });
@@ -1826,7 +1970,7 @@ async function regenerateOwnerCode(slug){
   try {
     const result = await rtoApi("admin-owner-code", { slug });
     const c = __rtoCustomers.find(x => x.slug === slug);
-    if (!c) { toast("Couldn't find that customer"); return; }
+    if (!c) { toast("Couldn't find that business"); return; }
     toast("New code generated");
     renderOwnerAccessModal({ ...c, owner_code: result.code });
   } catch (error) { toast(error.message || "Couldn't regenerate the code."); }
@@ -1901,6 +2045,7 @@ function renderOwnerEditor(c){
           <button class="btn" id="saveBtn" onclick="saveCustomer()">Save changes</button>
           <a class="btn outline-cyan" href="${tapLink(c.slug)}" target="_blank" rel="noreferrer">View my public page</a>
           <button class="btn secondary" type="button" onclick="renderAnalyticsModal('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">View my analytics</button>
+          <button class="btn secondary" type="button" onclick="showTrackedLinks('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">Tracked links</button>
           <button class="btn secondary" type="button" onclick="showBookingsInbox('${c.slug}','${esc(c.name).replace(/'/g,"\\'")}')">View bookings</button>
         </div>
       </div>
@@ -1936,11 +2081,11 @@ function scrollToAnchorIfPresent(){
 
 /* Live updates: if the business edits and saves while a visitor has this
    page open, it refreshes on its own within a second or two — no reload
-   needed. Requires realtime enabled on the customers table (see setup SQL). */
+   needed. Requires realtime enabled on the businesses table (see setup SQL). */
 function subscribeToLiveUpdates(slugValue){
   if (window.__rtoRefreshTimer) clearInterval(window.__rtoRefreshTimer);
   // Poll the server-authorized public endpoint instead of subscribing directly
-  // to the raw customers table, which contains private owner credential fields.
+  // to the raw businesses table, which contains private owner credential fields.
   window.__rtoRefreshTimer = setInterval(async () => {
     if (!document.body.contains(app) || !new URLSearchParams(window.location.search).get("c")) return;
     try {
@@ -1976,12 +2121,13 @@ function renderPublicProfileData(c){
     <button type="button" class="btn secondary" style="margin:10px auto 0;max-width:280px;width:auto;padding:9px 20px;" data-slug="${esc(s)}" data-name="${esc(c.name)}" onclick="sharePage(this)">Share this page</button>`;
 
   const belowSections = `
-      ${(c.whatsapp_number || c.google_review_url || c.maps_url || socialList.length) ? `
+      ${(c.whatsapp_number || c.google_review_url || c.maps_url || socialList.length || c.booking_enabled !== false) ? `
         <p class="p-section-h" id="section-connect">${esc(c.connect_label || "Connect")}</p>
         ${c.whatsapp_number ? tube(`https://wa.me/${digits(c.whatsapp_number)}?text=${encodeURIComponent(c.whatsapp_message||"Hi!")}`,"cyan","Chat on WhatsApp","Send a message directly", s) : ""}
         ${c.google_review_url ? tube(c.google_review_url,"pink","Leave a Google review","Takes 30 seconds", s) : ""}
         ${c.maps_url ? tube(c.maps_url,"cyan","Get directions","Open in Google Maps", s) : ""}
         ${socialList.map((soc,i) => socialTube(soc, i%2===0 ? "cyan" : "pink", s)).join("")}
+        ${c.booking_enabled !== false ? `<button type="button" class="tube pink" style="width:100%;text-align:left;cursor:pointer;color:inherit;font:inherit;" data-slug="${esc(s)}" data-name="${esc(c.name)}" data-guidelines="${esc(c.booking_guidelines||"")}" onclick="logEvent('${s}','click','Booking CTA');startBookingFlow(this)"><div class="dot"></div><div><div class="l">${esc(c.booking_label || "Book a visit")}</div><div class="s">Request an appointment, visit or order</div></div></button>` : ""}
       ` : ""}
 
       ${c.till_number ? `
@@ -2001,15 +2147,6 @@ function renderPublicProfileData(c){
         <p class="p-section-h" id="section-gallery">${esc(c.portfolio_title || "Recent work")}</p>
         <div class="strip">${c.portfolio.map(p => portfolioCard(p)).join("")}</div>
       ` : ""}
-
-      <p class="p-section-h" id="section-book">${esc(c.booking_label || "Book a visit")}</p>
-      <div class="info-card">
-        <div class="info-title">${esc(c.booking_label || "Ready to visit?")}</div>
-        <p class="hint" style="margin-bottom:12px;">Send your preferred date and time — they'll confirm with you directly.</p>
-        <div id="bookingWrap">
-          <button class="btn outline-cyan" data-slug="${esc(s)}" data-name="${esc(c.name)}" data-guidelines="${esc(c.booking_guidelines||"")}" onclick="startBookingFlow(this)">Request a booking</button>
-        </div>
-      </div>
 
       <p class="p-section-h" id="section-reviews">Reviews</p>
       <div class="info-card" id="reviewsSection"><p class="hint">Loading reviews…</p></div>

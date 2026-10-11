@@ -23,6 +23,7 @@ migrations=(
   supabase/migrations/202610100005_lock_direct_client_data_access.sql
   supabase/migrations/202610100006_rto_storage_limits.sql
   supabase/migrations/202610100007_repair_bigint_id_generation.sql
+  supabase/migrations/202610110001_business_analytics_and_access_recovery.sql
 )
 
 for migration in "${migrations[@]}"; do

@@ -9,3 +9,8 @@
 
 # Keep existing query-string routes (?c=slug, ?edit=slug) intact.
 # This is a multi-view static application, not a history-pushState SPA.
+
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
