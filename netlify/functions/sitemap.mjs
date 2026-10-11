@@ -24,4 +24,3 @@ export default async () => {
     return new Response("Sitemap temporarily unavailable", { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
   }
 };
-export const config = { path: "/sitemap.xml" };
