@@ -585,14 +585,14 @@ async function loadAnalyticsData(slugValue){
       ["Page views", d.views], ["Link clicks", d.clicks], ["Booking requests", d.bookings],
       ["Recorded events", d.eventCount]
     ];
-    let html = \`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">\${cards.map(([label,value])=>\`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">\${label}</div><b style="font-size:21px;">\${Number(value||0).toLocaleString()}</b></div>\`).join("")}</div>\`;
-    html += \`<p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>\${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([source,count])=>\`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>\${esc(source.toUpperCase())}</span><b>\${Number(count||0)}</b></div>\`).join("")||"<p class=hint>No visits recorded yet.</p>"}\`;
-    html += \`<p style="font-weight:700;margin:16px 0 8px;">Booking status</p>\${Object.entries(d.bookingStatusCounts||{}).map(([status,count])=>\`<div style="display:flex;justify-content:space-between;padding:6px 2px;"><span>\${esc(status)}</span><b>\${Number(count||0)}</b></div>\`).join("")||"<p class=hint>No booking requests recorded.</p>"}\`;
-    html += \`<p style="font-weight:700;margin:16px 0 8px;">Top clicked links</p>\${(d.topLinks||[]).map(x=>\`<div style="display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px solid var(--line);"><span>\${esc(x.link_label||"Other")}</span><b>\${Number(x.clicks||0)}</b></div>\`).join("")||"<p class=hint>No link clicks recorded yet.</p>"}\`;
-    html += \`<p class="hint" style="margin-top:12px;">Daily views and clicks for the last 30 days</p>\${(d.daily||[]).map(x=>\`<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--line);"><span>\${esc(x.date)}</span><span>Views: \${Number(x.views||0)}</span><span>Clicks: \${Number(x.clicks||0)}</span></div>\`).join("")||"<p class=hint>No daily activity recorded.</p>"}\`;
-    html += \`<p class="hint" style="margin-top:12px;">Counts reflect recorded page events. A visit does not prove a unique person or a physical NFC tap.</p>\`;
+    let html = `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${cards.map(([label,value])=>`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">${label}</div><b style="font-size:21px;">${Number(value||0).toLocaleString()}</b></div>`).join("")}</div>`;
+    html += `<p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([source,count])=>`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>${esc(source.toUpperCase())}</span><b>${Number(count||0)}</b></div>`).join("")||"<p class=hint>No visits recorded yet.</p>"}`;
+    html += `<p style="font-weight:700;margin:16px 0 8px;">Booking status</p>${Object.entries(d.bookingStatusCounts||{}).map(([status,count])=>`<div style="display:flex;justify-content:space-between;padding:6px 2px;"><span>${esc(status)}</span><b>${Number(count||0)}</b></div>`).join("")||"<p class=hint>No booking requests recorded.</p>"}`;
+    html += `<p style="font-weight:700;margin:16px 0 8px;">Top clicked links</p>${(d.topLinks||[]).map(x=>`<div style="display:flex;justify-content:space-between;padding:6px 2px;border-bottom:1px solid var(--line);"><span>${esc(x.link_label||"Other")}</span><b>${Number(x.clicks||0)}</b></div>`).join("")||"<p class=hint>No link clicks recorded yet.</p>"}`;
+    html += `<p class="hint" style="margin-top:12px;">Daily views and clicks for the last 30 days</p>${(d.daily||[]).map(x=>`<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--line);"><span>${esc(x.date)}</span><span>Views: ${Number(x.views||0)}</span><span>Clicks: ${Number(x.clicks||0)}</span></div>`).join("")||"<p class=hint>No daily activity recorded.</p>"}`;
+    html += `<p class="hint" style="margin-top:12px;">Counts reflect recorded page events. A visit does not prove a unique person or a physical NFC tap.</p>`;
     body.innerHTML = html;
-  } catch(e) { body.innerHTML = \`<p class="hint">Couldn't load analytics: \${esc(e.message)}</p>\`; }
+  } catch(e) { body.innerHTML = `<p class="hint">Couldn't load analytics: ${esc(e.message)}</p>`; }
 }
 function closeAnalyticsModal(){ const m = document.getElementById("analyticsModal"); if (m) m.remove(); }
 
@@ -684,15 +684,15 @@ async function bootstrapApp(){
   return renderLanding("home");
 }
 bootstrapApp().catch(err => {
-  app.innerHTML = \`
+  app.innerHTML = `
     <div class="center-screen"><div class="wrap" style="max-width:420px;text-align:center;">
       <div class="brand" style="justify-content:center;"><div class="mark">RTO</div><span>ReviewTapOperate</span></div>
       <div class="setup-warning" style="text-align:left;">
         <b>Something went wrong loading the page.</b><br><br>
-        \${esc(err.message || String(err))}
+        ${esc(err.message || String(err))}
         <br><br>Try a hard refresh (or a private/incognito tab). If it keeps happening, copy this exact message and send it over.
       </div>
-    </div></div>\`;
+    </div></div>`;
 });
 
 function renderLibraryLoadError(){
@@ -1097,18 +1097,18 @@ let __rtoCustomers = [];
 async function showSystemAnalytics(){
   if (blockPreviewWrite("System analytics are disabled in the verification preview.")) return;
   const old = document.getElementById("systemAnalyticsModal"); if (old) old.remove();
-  document.body.insertAdjacentHTML("beforeend", \`<div class="modal-bg" id="systemAnalyticsModal" onclick="if(event.target.id==='systemAnalyticsModal') document.getElementById('systemAnalyticsModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Platform-wide analytics</p><div id="systemAnalyticsBody"><p class="hint">Loading…</p></div><button class="btn secondary" onclick="document.getElementById('systemAnalyticsModal').remove()">Close</button></div></div>\`);
+  document.body.insertAdjacentHTML("beforeend", `<div class="modal-bg" id="systemAnalyticsModal" onclick="if(event.target.id==='systemAnalyticsModal') document.getElementById('systemAnalyticsModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Platform-wide analytics</p><div id="systemAnalyticsBody"><p class="hint">Loading…</p></div><button class="btn secondary" onclick="document.getElementById('systemAnalyticsModal').remove()">Close</button></div></div>`);
   const body = document.getElementById("systemAnalyticsBody");
   try {
     const d = await rtoApi("admin-system-analytics");
-    body.innerHTML = \`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">\${[
+    body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${[
       ["Businesses",d.businesses],["Listed businesses",d.listedBusinesses],["Unlisted businesses",d.unlistedBusinesses],["Customer accounts",d.members],["Bookings",d.bookings],["Pending bookings",d.pendingBookings],["Page views",d.views],["Link clicks",d.clicks],["Tracked events",d.eventCount],["Stored reviews",d.reviews]
-    ].map(([label,value])=>\`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">\${label}</div><b style="font-size:21px;">\${Number(value||0).toLocaleString()}</b></div>\`).join("")}</div>
-    <p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>\${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>\`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>\${esc(k.toUpperCase())}</span><b>\${Number(v||0)}</b></div>\`).join("")||"<p class=hint>No traffic events yet.</p>"}
-    <p style="font-weight:700;margin:16px 0 8px;">Booking status</p>\${Object.entries(d.bookingStatusCounts||{}).map(([k,v])=>\`<div style="display:flex;justify-content:space-between;padding:7px 2px;"><span>\${esc(k)}</span><b>\${Number(v||0)}</b></div>\`).join("")||"<p class=hint>No booking requests yet.</p>"}
-    <p style="font-weight:700;margin:16px 0 8px;">Top businesses by recent activity</p>\${(d.topBusinesses||[]).map(x=>\`<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);"><span>\${esc(x.name||x.slug)} <span class="hint">(\${esc(x.slug)})</span></span><span>Views: \${Number(x.views||0)} · Clicks: \${Number(x.clicks||0)}</span></div>\`).join("")||"<p class=hint>No activity recorded yet.</p>"}
-    <p class="hint" style="margin-top:12px;">Totals are based on stored records. Source attribution may be unknown; page visits do not identify unique people or prove physical NFC taps.</p>\`;
-  } catch(e) { body.innerHTML = \`<p class="hint">Couldn't load system analytics: \${esc(e.message)}</p>\`; }
+    ].map(([label,value])=>`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">${label}</div><b style="font-size:21px;">${Number(value||0).toLocaleString()}</b></div>`).join("")}</div>
+    <p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>${esc(k.toUpperCase())}</span><b>${Number(v||0)}</b></div>`).join("")||"<p class=hint>No traffic events yet.</p>"}
+    <p style="font-weight:700;margin:16px 0 8px;">Booking status</p>${Object.entries(d.bookingStatusCounts||{}).map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 2px;"><span>${esc(k)}</span><b>${Number(v||0)}</b></div>`).join("")||"<p class=hint>No booking requests yet.</p>"}
+    <p style="font-weight:700;margin:16px 0 8px;">Top businesses by recent activity</p>${(d.topBusinesses||[]).map(x=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);"><span>${esc(x.name||x.slug)} <span class="hint">(${esc(x.slug)})</span></span><span>Views: ${Number(x.views||0)} · Clicks: ${Number(x.clicks||0)}</span></div>`).join("")||"<p class=hint>No activity recorded yet.</p>"}
+    <p class="hint" style="margin-top:12px;">Totals are based on stored records. Source attribution may be unknown; page visits do not identify unique people or prove physical NFC taps.</p>`;
+  } catch(e) { body.innerHTML = `<p class="hint">Couldn't load system analytics: ${esc(e.message)}</p>`; }
 }
 async function showAccessResetRequests(){
   if (blockPreviewWrite("Access reset requests are disabled in the verification preview.")) return;
@@ -1121,19 +1121,19 @@ async function loadAccessResetRequests(){
   try {
     const result = await rtoApi("admin-reset-requests");
     if (!result.requests.length) { body.innerHTML = '<p class="hint">No reset requests recorded yet.</p>'; return; }
-    body.innerHTML = result.requests.map(r=>\`<div style="padding:10px;background:var(--panel-2);border-radius:10px;margin:8px 0;"><b>\${esc(r.member_name||"Customer")}</b><div class="hint">\${esc(r.phone)} · \${new Date(r.created_at).toLocaleString()}</div><div class="hint" style="margin-top:4px;">Status: <b>\${esc(r.status)}</b>\${r.resolved_at ? " · Updated " + new Date(r.resolved_at).toLocaleString() : ""}</div>\${r.status==="pending" ? \`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="btn" style="width:auto;" onclick="issueMemberResetCode('\${r.id}')">Issue replacement</button><button class="btn secondary" style="width:auto;" onclick="rejectMemberResetRequest('\${r.id}')">Reject request</button></div>\` : ""}</div>\`).join("");
-  } catch(e) { body.innerHTML = \`<p class="hint">Couldn't load requests: \${esc(e.message)}</p>\`; }
+    body.innerHTML = result.requests.map(r=>`<div style="padding:10px;background:var(--panel-2);border-radius:10px;margin:8px 0;"><b>${esc(r.member_name||"Customer")}</b><div class="hint">${esc(r.phone)} · ${new Date(r.created_at).toLocaleString()}</div><div class="hint" style="margin-top:4px;">Status: <b>${esc(r.status)}</b>${r.resolved_at ? " · Updated " + new Date(r.resolved_at).toLocaleString() : ""}</div>${r.status==="pending" ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="btn" style="width:auto;" onclick="issueMemberResetCode('${r.id}')">Issue replacement</button><button class="btn secondary" style="width:auto;" onclick="rejectMemberResetRequest('${r.id}')">Reject request</button></div>` : ""}</div>`).join("");
+  } catch(e) { body.innerHTML = `<p class="hint">Couldn't load requests: ${esc(e.message)}</p>`; }
 }
 async function issueMemberResetCode(requestId){
   if (!confirm("Have you independently verified that this person owns the account? Only continue after verification.")) return;
   try {
     const result = await rtoApi("admin-member-reset", { requestId });
     const body = document.getElementById("resetRequestsBody");
-    if (body) body.innerHTML = \`<div style="padding:12px;background:var(--panel-2);border-radius:10px;"><b>Replacement access code</b><p class="hint">Give this code to the verified customer through a private channel. It will not be shown again.</p><input readonly id="issuedResetCode" value="\${esc(result.code)}" style="width:100%;font-family:monospace;font-size:18px;text-align:center;letter-spacing:2px;"><button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('issuedResetCode').value);toast('Code copied')">Copy code</button></div>\`;
+    if (body) body.innerHTML = `<div style="padding:12px;background:var(--panel-2);border-radius:10px;"><b>Replacement access code</b><p class="hint">Give this code to the verified customer through a private channel. It will not be shown again.</p><input readonly id="issuedResetCode" value="${esc(result.code)}" style="width:100%;font-family:monospace;font-size:18px;text-align:center;letter-spacing:2px;"><button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('issuedResetCode').value);toast('Code copied')">Copy code</button></div>`;
     await loadAccessResetRequests();
     if (body) {
       const codePanel = document.createElement("div");
-      codePanel.innerHTML = \`<div style="padding:12px;background:var(--panel-2);border-radius:10px;margin-bottom:10px;"><b>Replacement access code</b><p class="hint">Give this code to the verified customer privately. It will not be shown again.</p><input readonly value="\${esc(result.code)}" style="width:100%;font-family:monospace;font-size:18px;text-align:center;letter-spacing:2px;" id="issuedResetCode"><button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('issuedResetCode').value);toast('Code copied')">Copy code</button></div>\`;
+      codePanel.innerHTML = `<div style="padding:12px;background:var(--panel-2);border-radius:10px;margin-bottom:10px;"><b>Replacement access code</b><p class="hint">Give this code to the verified customer privately. It will not be shown again.</p><input readonly value="${esc(result.code)}" style="width:100%;font-family:monospace;font-size:18px;text-align:center;letter-spacing:2px;" id="issuedResetCode"><button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText(document.getElementById('issuedResetCode').value);toast('Code copied')">Copy code</button></div>`;
       body.prepend(codePanel.firstElementChild);
     }
   } catch(e) { toast(e.message || "Couldn't issue a replacement code."); }
@@ -1193,9 +1193,9 @@ function showTrackedLinks(slugValue, name){
     ["WhatsApp", trackedLink(slugValue, "whatsapp")],
     ["Google", trackedLink(slugValue, "google")]
   ];
-  const renderRows = items => items.map(([label,url]) => \`<div style="margin:10px 0;padding:10px;background:var(--panel-2);border-radius:8px;"><b>\${esc(label)}</b><div style="font-size:11px;word-break:break-all;margin:5px 0;">\${esc(url)}</div><button class="btn secondary" style="width:auto;padding:6px 10px;" onclick="copyTrackedUrl('\${esc(url)}')">Copy</button></div>\`).join("");
+  const renderRows = items => items.map(([label,url]) => `<div style="margin:10px 0;padding:10px;background:var(--panel-2);border-radius:8px;"><b>${esc(label)}</b><div style="font-size:11px;word-break:break-all;margin:5px 0;">${esc(url)}</div><button class="btn secondary" style="width:auto;padding:6px 10px;" onclick="copyTrackedUrl('${esc(url)}')">Copy</button></div>`).join("");
   const old = document.getElementById("trackedLinksModal"); if (old) old.remove();
-  document.body.insertAdjacentHTML("beforeend", \`<div class="modal-bg" id="trackedLinksModal" onclick="if(event.target.id==='trackedLinksModal') document.getElementById('trackedLinksModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Tracked links — \${esc(name)}</p><p class="hint">Use these three by default. Existing links continue to work. Channel-specific links are optional.</p>\${renderRows(rows)}<details style="margin:12px 0;"><summary style="cursor:pointer;font-weight:700;">Advanced channel tracking</summary><p class="hint">Create these only when you need separate source reporting.</p>\${renderRows(advanced)}</details><button class="btn secondary" onclick="document.getElementById('trackedLinksModal').remove()">Close</button></div></div>\`);
+  document.body.insertAdjacentHTML("beforeend", `<div class="modal-bg" id="trackedLinksModal" onclick="if(event.target.id==='trackedLinksModal') document.getElementById('trackedLinksModal').remove()"><div class="modal" style="text-align:left;"><p style="font-weight:700;">Tracked links — ${esc(name)}</p><p class="hint">Use these three by default. Existing links continue to work. Channel-specific links are optional.</p>${renderRows(rows)}<details style="margin:12px 0;"><summary style="cursor:pointer;font-weight:700;">Advanced channel tracking</summary><p class="hint">Create these only when you need separate source reporting.</p>${renderRows(advanced)}</details><button class="btn secondary" onclick="document.getElementById('trackedLinksModal').remove()">Close</button></div></div>`);
 }
 async function copyTrackedUrl(url){ try { await navigator.clipboard.writeText(url); toast("Tracked link copied"); } catch { toast("Copy failed; select and copy the URL."); } }
 async function deleteCustomer(s){
