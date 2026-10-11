@@ -9,7 +9,7 @@ function blockPreviewWrite(message = "This action is disabled in the verificatio
   return true;
 }
 function renderPreviewAccessNotice(message) {
-  app.innerHTML = `<div class="center-screen"><div class="wrap" style="max-width:420px;"><div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div><div class="card"><h2 style="margin-top:0;">Verification preview</h2><p class="hint" style="font-size:13px;color:var(--text);">${esc(message)}</p><p class="hint">This preview is connected to the production Supabase project. Privileged screens are disabled here to prevent accidental production changes.</p><a class="btn" href="/">Return to preview home</a></div></div></div>`;
+  app.innerHTML = `<div class="center-screen"><div class="wrap" style="max-width:420px;"><div class="brand"><div class="mark">RTO</div><span>ReviewTapOperate</span></div><div class="card"><h2 style="margin-top:0;">Verification preview</h2><p class="hint" style="font-size:13px;color:var(--text);">${esc(message)}</p><p class="hint">Sign-in and changes are intentionally disabled in preview deployments because they connect to the production database. To use the live account, sign in on the production site.</p><a class="btn" href="https://reviewtapoperate.netlify.app/">Open production site to sign in</a><a class="btn secondary" style="margin-top:8px;" href="/">Return to preview home</a></div></div></div>`;
 }
 
 const configured = true; // database access is server-side through Netlify Functions
@@ -129,10 +129,30 @@ async function doMemberSignup(){
   try {
     const result = await rtoApi("member-signup", { name, phone });
     setMemberSession(result.member);
-    toast("Account created! Your access code is " + result.accessCode + " — save it.");
-    closeMemberAuthModal();
-    if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
+    const body = document.getElementById("memberAuthBody");
+    if (!body) return;
+    body.innerHTML = `
+      <p style="font-weight:700;margin:0 0 4px;">Account created successfully</p>
+      <p class="hint" style="margin-bottom:14px;">You are signed in. Save this access code now; it is required the next time you log in, and for security it cannot be shown again after you leave this screen.</p>
+      <div class="field" style="text-align:left;"><label>Your access code</label><input id="newMemberAccessCode" readonly value="${esc(result.accessCode)}" style="font-family:monospace;font-weight:800;letter-spacing:2px;text-align:center;font-size:20px;" onclick="this.select()"></div>
+      <button class="btn secondary" onclick="copyMemberAccessCode()">Copy access code</button>
+      <button class="btn" style="margin-top:8px;" onclick="finishMemberSignup()">Continue to My Account</button>`;
   } catch (error) { toast(error.message || "Couldn't create account."); }
+}
+async function copyMemberAccessCode(){
+  const field = document.getElementById("newMemberAccessCode");
+  if (!field) return;
+  field.select();
+  try {
+    await navigator.clipboard.writeText(field.value);
+    toast("Access code copied. Save it somewhere safe.");
+  } catch {
+    toast("The code is selected. Copy it and save it somewhere safe.");
+  }
+}
+function finishMemberSignup(){
+  closeMemberAuthModal();
+  if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
 }
 async function doMemberLogin(){
   if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
