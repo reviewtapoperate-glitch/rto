@@ -1,7 +1,7 @@
 /* ============================================================
    1. CONFIG
    ============================================================ */
-const CONTACT_WHATSAPP = "254700000000"; // confirm the business contact number before release
+const CONTACT_WHATSAPP = ""; // set the verified RTO business WhatsApp number before enabling contact links
 const IS_NETLIFY_PREVIEW = location.hostname.includes("--reviewtapoperate.netlify.app") || location.hostname.startsWith("deploy-preview-");
 function blockPreviewWrite(message = "This action is disabled in the verification preview. Use a separate staging database for functional testing.") {
   if (!IS_NETLIFY_PREVIEW) return false;
@@ -543,7 +543,6 @@ function legacySocialSeed(existing){
 function logEvent(slugValue, type, label){
   if (IS_NETLIFY_PREVIEW) return;
 
-  if (!sb) return;
   try { rtoApi("event-log", { slug: slugValue, eventType: type, label: label || null }).catch(() => {}); } catch(e) { /* best-effort, never blocks the visitor */ }
 }
 function renderAnalyticsModal(slugValue, name){
@@ -730,7 +729,7 @@ function renderLanding(view){
         </div>
       </div>
 
-      <a href="https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent("Hi, I'd like to talk about getting a ReviewTapOperate page for my business")}" target="_blank" rel="noreferrer" class="btn" style="margin-top:16px;">Contact us on WhatsApp</a>
+      ${CONTACT_WHATSAPP ? `<a href="https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent("Hi, I'd like to talk about getting a ReviewTapOperate page for my business")}" target="_blank" rel="noreferrer" class="btn" style="margin-top:16px;">Contact us on WhatsApp</a>` : ""}
 
       <p class="footer-tag" style="margin-top:26px;">ReviewTapOperate</p>
     </div>`;
@@ -1996,7 +1995,7 @@ function renderPublicProfileData(c){
       <div class="info-card" id="reviewsSection"><p class="hint">Loading reviews…</p></div>
 
       <p class="footer-tag">Powered by ReviewTapOperate</p>
-      <a href="https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent("Hi, I saw a ReviewTapOperate page and I'm interested in getting one for my own business")}" target="_blank" rel="noreferrer" class="footer-tag" style="text-decoration:underline;display:block;margin-top:4px;">Want a page like this for your business? Contact us</a>`;
+      ${CONTACT_WHATSAPP ? `<a href="https://wa.me/${CONTACT_WHATSAPP}?text=${encodeURIComponent("Hi, I saw a ReviewTapOperate page and I'm interested in getting one for my own business")}" target="_blank" rel="noreferrer" class="footer-tag" style="text-decoration:underline;display:block;margin-top:4px;">Want a page like this for your business? Contact us</a>` : ""}`;
 
   if (effectiveCoverStyle === "half" || effectiveCoverStyle === "full") {
     app.innerHTML = `
