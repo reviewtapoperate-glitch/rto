@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check frontend/js/app.js && node --check netlify/functions/rto-api.mjs && node --check netlify/functions/rto-auth.mjs && node --check netlify/functions/sitemap.mjs"
+    "check": "node --check frontend/js/app.js && node --check netlify/functions/rto-api.mjs && node --check netlify/functions/rto-auth.mjs && node --check netlify/functions/sitemap.mjs",
+    "build": "npm run check && npm test"
   }
 }
