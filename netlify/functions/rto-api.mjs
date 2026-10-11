@@ -221,6 +221,38 @@ export async function handleRtoApi(request, context) {
       const token = await makeSession({ role: "member", member }, sessionSecret);
       return json({ ok: true, member }, 200, { "set-cookie": sessionCookie(token) });
     }
+    if (action === "member-reset-request") {
+      const name = String(body?.name || "").trim().slice(0, 100);
+      const phone = normalizePhone(body?.phone);
+      if (name.length < 2 || phone.length < 7 || phone.length > 20) return json({ error: "Enter the name and phone number used for the account." }, 400);
+      const rows = await supabaseRequest("members?select=id,name,phone&phone=eq." + encodeURIComponent(phone) + "&limit=1");
+      const member = Array.isArray(rows) ? rows[0] : null;
+      if (member && member.name.trim().toLowerCase() === name.toLowerCase()) {
+        await supabaseRequest("access_code_reset_requests", "POST", { member_id: member.id, member_name: member.name, phone, status: "pending" });
+      }
+      // Same response whether or not the account exists; staff verify the request out of band before issuing a replacement.
+      return json({ ok: true, message: "If the details match an account, a reset request has been recorded. ReviewTapOperate support must verify ownership before issuing a replacement code." });
+    }
+    if (action === "admin-reset-requests") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const rows = await supabaseRequest("access_code_reset_requests?select=id,member_id,member_name,phone,status,created_at&status=eq.pending&order=created_at.asc&limit=200");
+      return json({ requests: Array.isArray(rows) ? rows : [] });
+    }
+    if (action === "admin-member-reset") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const requestId = String(body?.requestId || "");
+      if (!/^\\d+$/.test(requestId)) return json({ error: "Invalid reset request." }, 400);
+      const requests = await supabaseRequest("access_code_reset_requests?select=id,member_id,status&id=eq." + encodeURIComponent(requestId) + "&limit=1");
+      const resetRequest = Array.isArray(requests) ? requests[0] : null;
+      if (!resetRequest || resetRequest.status !== "pending" || !resetRequest.member_id) return json({ error: "This request cannot be completed. Verify the account details first." }, 404);
+      const code = randomAccessCode();
+      const codeHash = await hashCredential(code);
+      await supabaseRequest("members?id=eq." + encodeURIComponent(resetRequest.member_id), "PATCH", { access_code: null, access_code_hash: codeHash });
+      await supabaseRequest("access_code_reset_requests?id=eq." + encodeURIComponent(requestId), "PATCH", { status: "resolved", resolved_at: new Date().toISOString() });
+      return json({ ok: true, code });
+    }
     if (action === "public-customer") {
       const slug = String(body?.slug || "").trim().toLowerCase();
       if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
@@ -252,7 +284,7 @@ export async function handleRtoApi(request, context) {
       const slug = session.role === "owner" ? session.slug : String(incoming.slug || "").trim().toLowerCase();
       if (!slug || !/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
       if (session.role === "owner" && incoming.slug && incoming.slug !== session.slug) return json({ error: "Business owners cannot change their page link. Contact RTO for help." }, 403);
-      const allowed = ["name","business_type","title","phone","whatsapp_number","whatsapp_message","google_review_url","instagram","linkedin","till_number","till_label","portfolio","photo_url","background_url","menu_items","menu_image_url","portfolio_title","theme","social_links","is_open","connect_label","pay_label","menu_label","cover_style","cover_overlay","listed_in_directory","booking_guidelines","status_on_label","status_off_label","schedule","booking_label","address","maps_url"];
+      const allowed = ["name","business_type","title","phone","whatsapp_number","whatsapp_message","google_review_url","instagram","linkedin","till_number","till_label","portfolio","photo_url","background_url","menu_items","menu_image_url","portfolio_title","theme","social_links","is_open","connect_label","pay_label","menu_label","cover_style","cover_overlay","listed_in_directory","booking_guidelines","booking_enabled","status_on_label","status_off_label","schedule","booking_label","address","maps_url"];
       const record = { slug };
       for (const key of allowed) if (Object.prototype.hasOwnProperty.call(incoming, key)) record[key] = incoming[key];
       if (!String(record.name || "").trim() || !String(record.business_type || "").trim()) return json({ error: "Business name and type are required." }, 400);
@@ -316,8 +348,9 @@ export async function handleRtoApi(request, context) {
       if (!/^[a-z0-9-]{1,80}$/.test(slug) || name.length < 2 || phone.length < 7) return json({ error: "Enter your name and a valid phone number." }, 400);
       if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ error: "Choose a valid booking date." }, 400);
       if (time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return json({ error: "Choose a valid booking time." }, 400);
-      const biz = await supabaseRequest("customers?select=slug,booking_guidelines&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      const biz = await supabaseRequest("customers?select=slug,booking_guidelines,booking_enabled&slug=eq." + encodeURIComponent(slug) + "&limit=1");
       if (!Array.isArray(biz) || !biz.length) return json({ error: "Business page not found." }, 404);
+      if (biz[0].booking_enabled === false) return json({ error: "This business is not accepting booking requests right now." }, 409);
       if (String(biz[0].booking_guidelines || "").trim() && !guidelinesAccepted) return json({ error: "Please confirm the booking guidelines before submitting." }, 400);
       const session = await readSession(request, sessionSecret);
       const memberId = session?.role === "member" ? session.member?.id : null;
@@ -348,11 +381,40 @@ export async function handleRtoApi(request, context) {
       const rows = await supabaseRequest("bookings?select=*,customers(name)&member_id=eq." + encodeURIComponent(session.member.id) + "&order=created_at.desc&limit=500");
       return json({ bookings: Array.isArray(rows) ? rows : [] });
     }
+    if (action === "admin-system-analytics") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const [businesses, members, bookings, events] = await Promise.all([
+        supabaseRequest("customers?select=slug,name,listed_in_directory&limit=10000"),
+        supabaseRequest("members?select=id&limit=10000"),
+        supabaseRequest("bookings?select=id,status&limit=10000"),
+        supabaseRequest("page_events?select=slug,event_type,link_label,source,created_at&order=created_at.desc&limit=10000")
+      ]);
+      const eventRows = Array.isArray(events) ? events : [];
+      const sourceCounts = {};
+      const eventCounts = {};
+      for (const event of eventRows) {
+        const source = event.source || "unknown";
+        sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+        eventCounts[event.event_type || "unknown"] = (eventCounts[event.event_type || "unknown"] || 0) + 1;
+      }
+      return json({
+        businesses: Array.isArray(businesses) ? businesses.length : 0,
+        listedBusinesses: Array.isArray(businesses) ? businesses.filter(b => b.listed_in_directory !== false).length : 0,
+        members: Array.isArray(members) ? members.length : 0,
+        bookings: Array.isArray(bookings) ? bookings.length : 0,
+        pendingBookings: Array.isArray(bookings) ? bookings.filter(b => b.status === "pending").length : 0,
+        eventCount: eventRows.length,
+        sourceCounts,
+        eventCounts,
+        recentEvents: eventRows.slice(0, 100)
+      });
+    }
     if (action === "analytics") {
       const session = await readSession(request, sessionSecret);
       const slug = String(body?.slug || "").trim().toLowerCase();
       if (!session || !["admin", "owner"].includes(session.role) || !/^[a-z0-9-]{1,80}$/.test(slug) || (session.role === "owner" && session.slug !== slug)) return json({ error: "Not authorized to view analytics." }, 403);
-      const rows = await supabaseRequest("page_events?select=event_type,link_label&slug=eq." + encodeURIComponent(slug) + "&limit=5000");
+      const rows = await supabaseRequest("page_events?select=event_type,link_label,source,created_at&slug=eq." + encodeURIComponent(slug) + "&order=created_at.desc&limit=10000");
       return json({ events: Array.isArray(rows) ? rows : [] });
     }
     if (action === "upload-image") {
@@ -406,9 +468,13 @@ export async function handleRtoApi(request, context) {
       const slug = String(body?.slug || "").trim().toLowerCase();
       const eventType = String(body?.eventType || "");
       const label = String(body?.label || "").trim().slice(0, 200);
+      const allowedSources = new Set(["nfc", "qr", "link", "instagram", "tiktok", "facebook", "whatsapp", "google", "other", "unknown"]);
+      const requestedSource = String(body?.source || "unknown").toLowerCase();
+      const source = allowedSources.has(requestedSource) ? requestedSource : "unknown";
+      const referrer = String(body?.referrer || "").slice(0, 500);
       if (!/^[a-z0-9-]{1,80}$/.test(slug) || !["view","click"].includes(eventType)) return json({ ok: true });
       const exists = await supabaseRequest("customers?select=slug&slug=eq." + encodeURIComponent(slug) + "&limit=1");
-      if (Array.isArray(exists) && exists.length) await supabaseRequest("page_events", "POST", { slug, event_type: eventType, link_label: label || null });
+      if (Array.isArray(exists) && exists.length) await supabaseRequest("page_events", "POST", { slug, event_type: eventType, link_label: label || null, source, referrer: referrer || null });
       return json({ ok: true });
     }
     if (action === "owner-profile") {
