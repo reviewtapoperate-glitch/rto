@@ -233,8 +233,18 @@ export async function handleRtoApi(request, context) {
       const name = String(body?.name || "").trim().slice(0, 100);
       const phone = normalizePhone(body?.phone);
       if (name.length < 2 || phone.length < 7 || phone.length > 20) return json({ error: "Enter the name and phone number used for the account." }, 400);
-      const rows = await supabaseRequest("members?select=id,name,phone&limit=1000");
       const submittedPhone = canonicalPhoneForMatch(phone);
+      const submittedDigits = phone.replace(/\D/g, "");
+      const candidates = [...new Set([
+        submittedDigits,
+        submittedPhone,
+        submittedPhone ? "+" + submittedPhone : "",
+        submittedPhone.startsWith("254") ? "0" + submittedPhone.slice(3) : ""
+      ].filter(value => /^\+?\d{7,15}$/.test(value)))];
+      const phoneFilter = candidates.map(value => "phone.eq." + encodeURIComponent(value)).join(",");
+      const rows = candidates.length
+        ? await supabaseRequest("members?select=id,name,phone&or=(" + phoneFilter + ")&limit=100")
+        : [];
       const matchingMembers = Array.isArray(rows) ? rows.filter(member =>
         canonicalPhoneForMatch(member.phone) === submittedPhone &&
         String(member.name || "").trim().toLowerCase() === name.toLowerCase()
