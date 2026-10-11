@@ -1153,10 +1153,10 @@ async function showSystemAnalytics(){
   try {
     const d = await rtoApi("admin-system-analytics");
     body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${[
-      ["Businesses",d.customers],["Searchable businesses",d.listedBusinesses],["Customer accounts",d.members],["Bookings",d.bookings],["Pending bookings",d.pendingBookings],["Tracked events",d.eventCount]
+      ["Businesses",d.businesses],["Searchable businesses",d.listedBusinesses],["Customer accounts",d.members],["Bookings",d.bookings],["Pending bookings",d.pendingBookings],["Tracked events",d.eventCount]
     ].map(([label,value])=>`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">${label}</div><b style="font-size:21px;">${Number(value||0).toLocaleString()}</b></div>`).join("")}</div>
     <p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>${esc(k.toUpperCase())}</span><b>${v}</b></div>`).join("")||"<p class=hint>No traffic events yet.</p>"}
-    <p class="hint" style="margin-top:12px;">System totals are based on recorded data. Source attribution depends on tracked NFC, QR and channel-specific links. Event reporting currently reads up to 10,000 most recent records for breakdowns.</p>`;
+    <p class="hint" style="margin-top:12px;">System totals are based on recorded data. Source attribution depends on tracked NFC, QR and channel-specific links. Platform totals and source breakdowns are aggregated across stored records; the recent-event list is limited for display.</p>`;
   } catch(e) { body.innerHTML = `<p class="hint">Couldn't load system analytics: ${esc(e.message)}</p>`; }
 }
 async function showAccessResetRequests(){
