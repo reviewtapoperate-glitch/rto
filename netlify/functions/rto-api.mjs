@@ -384,31 +384,12 @@ export async function handleRtoApi(request, context) {
     if (action === "admin-system-analytics") {
       const session = await readSession(request, sessionSecret);
       if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
-      const [businesses, members, bookings, events] = await Promise.all([
-        supabaseRequest("customers?select=slug,name,listed_in_directory&limit=10000"),
-        supabaseRequest("members?select=id&limit=10000"),
-        supabaseRequest("bookings?select=id,status&limit=10000"),
-        supabaseRequest("page_events?select=slug,event_type,link_label,source,created_at&order=created_at.desc&limit=10000")
+      const [summary, recent] = await Promise.all([
+        supabaseRequest("rpc/rto_system_analytics", "POST", {}),
+        supabaseRequest("page_events?select=slug,event_type,link_label,source,created_at&order=created_at.desc&limit=100")
       ]);
-      const eventRows = Array.isArray(events) ? events : [];
-      const sourceCounts = {};
-      const eventCounts = {};
-      for (const event of eventRows) {
-        const source = event.source || "unknown";
-        sourceCounts[source] = (sourceCounts[source] || 0) + 1;
-        eventCounts[event.event_type || "unknown"] = (eventCounts[event.event_type || "unknown"] || 0) + 1;
-      }
-      return json({
-        businesses: Array.isArray(businesses) ? businesses.length : 0,
-        listedBusinesses: Array.isArray(businesses) ? businesses.filter(b => b.listed_in_directory !== false).length : 0,
-        members: Array.isArray(members) ? members.length : 0,
-        bookings: Array.isArray(bookings) ? bookings.length : 0,
-        pendingBookings: Array.isArray(bookings) ? bookings.filter(b => b.status === "pending").length : 0,
-        eventCount: eventRows.length,
-        sourceCounts,
-        eventCounts,
-        recentEvents: eventRows.slice(0, 100)
-      });
+      const result = Array.isArray(summary) ? (summary[0] || {}) : (summary || {});
+      return json({ ...result, recentEvents: Array.isArray(recent) ? recent : [] });
     }
     if (action === "analytics") {
       const session = await readSession(request, sessionSecret);
