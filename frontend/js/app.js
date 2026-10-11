@@ -496,12 +496,12 @@ async function renderMyAccountPage(member){
   holder.innerHTML = data.map(b => `
     <div class="row-item" style="margin-bottom:10px;flex-wrap:wrap;">
       <div>
-        <div class="name">${esc((b.businesses && b.businesses.name) || "Business")}</div>
+        <div class="name">${esc((b.customers && b.customers.name) || "Business")}</div>
         <div class="hint">${b.preferred_date ? esc(b.preferred_date) : ""} ${b.preferred_time ? "· " + esc(b.preferred_time) : ""}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;color:${b.status==='confirmed'?'#2ECC71':b.status==='declined'?'#FF6B6B':'var(--text-dim)'};text-transform:capitalize;">${esc(b.status)}</span>
-        ${b.status === "confirmed" ? `<button class="btn secondary" style="width:auto;padding:5px 10px;font-size:11px;" data-id="${b.id}" data-name="${esc((b.businesses && b.businesses.name) || "Business")}" data-date="${esc(b.preferred_date||"")}" data-time="${esc(b.preferred_time||"")}" data-note="${esc(b.note||"")}" onclick="downloadIcsFromEl(this)">Add to Calendar</button>` : ""}
+        ${b.status === "confirmed" ? `<button class="btn secondary" style="width:auto;padding:5px 10px;font-size:11px;" data-id="${b.id}" data-name="${esc((b.customers && b.customers.name) || "Business")}" data-date="${esc(b.preferred_date||"")}" data-time="${esc(b.preferred_time||"")}" data-note="${esc(b.note||"")}" onclick="downloadIcsFromEl(this)">Add to Calendar</button>` : ""}
       </div>
     </div>`).join("");
 }
@@ -967,7 +967,7 @@ async function doSearch(){
 
   if (!__searchCache) {
     let data; let error = null;
-    try { data = (await rtoApi("directory")).businesses || []; } catch (e) { error = e; data = []; }
+    try { data = (await rtoApi("directory")).customers || []; } catch (e) { error = e; data = []; }
     if (error) { holder.innerHTML = `<p class="muted">Couldn't search: ${esc(error.message)}</p>`; return; }
     __searchCache = data || [];
   }
@@ -1153,7 +1153,7 @@ async function showSystemAnalytics(){
   try {
     const d = await rtoApi("admin-system-analytics");
     body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${[
-      ["Businesses",d.businesses],["Searchable businesses",d.listedBusinesses],["Customer accounts",d.members],["Bookings",d.bookings],["Pending bookings",d.pendingBookings],["Tracked events",d.eventCount]
+      ["Businesses",d.customers],["Searchable businesses",d.listedBusinesses],["Customer accounts",d.members],["Bookings",d.bookings],["Pending bookings",d.pendingBookings],["Tracked events",d.eventCount]
     ].map(([label,value])=>`<div style="background:var(--panel-2);border-radius:10px;padding:12px;"><div class="hint">${label}</div><b style="font-size:21px;">${Number(value||0).toLocaleString()}</b></div>`).join("")}</div>
     <p style="font-weight:700;margin:16px 0 8px;">Visits by source</p>${Object.entries(d.sourceCounts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line);"><span>${esc(k.toUpperCase())}</span><b>${v}</b></div>`).join("")||"<p class=hint>No traffic events yet.</p>"}
     <p class="hint" style="margin-top:12px;">System totals are based on recorded data. Source attribution depends on tracked NFC, QR and channel-specific links. Event reporting currently reads up to 10,000 most recent records for breakdowns.</p>`;
@@ -1186,7 +1186,7 @@ async function loadCustomerList(){
 
   const holder = document.getElementById("listHolder");
   let data; let error = null;
-  try { data = (await rtoApi("admin-customers-list")).businesses || []; } catch (e) { error = e; data = []; }
+  try { data = (await rtoApi("admin-customers-list")).customers || []; } catch (e) { error = e; data = []; }
   if (error) { holder.innerHTML = `<p class="muted">Couldn't load businesses: ${esc(error.message)}</p>`; return; }
   __rtoCustomers = data;
   if (!data.length) { holder.innerHTML = `<p class="muted">No businesses yet — add your first one above.</p>`; return; }
@@ -1363,9 +1363,9 @@ function customerFormFieldsHtml(c, existing){
         <div class="hint">When disabled, the booking action is hidden from the public page and new requests are blocked.</div>
       </div>
       <div class="field">
-        <label>Button label shown to businesses</label>
+        <label>Button label shown to visitors</label>
         <input id="f_booking_label" value="${esc(c.booking_label || "Book a visit")}" placeholder='e.g. "Book a visit" for appointments, "Order now" for products'>
-        <div class="hint">This same feature works for appointments (a salon) or orders (a clothing shop) — just rename it to match what your businesses are actually doing.</div>
+        <div class="hint">This same feature works for appointments (a salon) or orders (a clothing shop) — just rename it to match what your customers are actually doing.</div>
       </div>
       <div class="field">
         <label>Your booking guidelines / policy (optional)</label>
@@ -1377,7 +1377,7 @@ function customerFormFieldsHtml(c, existing){
       <div class="field"><label>Phone number</label><input id="f_phone" value="${esc(c.phone||"")}" placeholder="+2547XXXXXXXX"><div class="hint">Saved straight into the visitor's phone contacts. Leave blank to hide this button.</div></div>
 
       <div class="section-label">Connect buttons</div>
-      <div class="field"><label>Section label shown to businesses</label><input id="f_connect_label" value="${esc(c.connect_label || "Connect")}" placeholder="e.g. Connect, Reach us, Find us"></div>
+      <div class="field"><label>Section label shown to visitors</label><input id="f_connect_label" value="${esc(c.connect_label || "Connect")}" placeholder="e.g. Connect, Reach us, Find us"></div>
       <div class="field"><label>WhatsApp number</label><input id="f_wa" value="${esc(c.whatsapp_number||"")}" placeholder="+2547XXXXXXXX"></div>
       <div class="field"><label>WhatsApp opening message</label><input id="f_wamsg" value="${esc(c.whatsapp_message||"Hi, I got your tap card!")}"></div>
       <div class="field"><label>Google review link</label><input id="f_review" value="${esc(c.google_review_url||"")}" placeholder="https://g.page/r/.../review"></div>
@@ -1388,13 +1388,13 @@ function customerFormFieldsHtml(c, existing){
       <button class="btn secondary" type="button" style="width:auto;padding:8px 14px;font-size:13px;" onclick="addSocialRow()">+ Add social link</button>
 
       <div class="section-label" style="margin-top:22px;">Payment</div>
-      <div class="field"><label>Section label shown to businesses</label><input id="f_pay_label" value="${esc(c.pay_label || "Pay")}" placeholder="e.g. Pay, Payment, Send Money"></div>
+      <div class="field"><label>Section label shown to visitors</label><input id="f_pay_label" value="${esc(c.pay_label || "Pay")}" placeholder="e.g. Pay, Payment, Send Money"></div>
       <div class="field"><label>Till / Paybill number</label><input id="f_till" value="${esc(c.till_number||"")}"></div>
       <div class="field"><label>Label above it</label><input id="f_tillLabel" value="${esc(c.till_label||"M-Pesa Till Number")}"></div>
 
       <div id="menuSectionWrap">
         <div class="section-label" style="margin-top:22px;">Menu / price list (shown because this business type usually needs one)</div>
-        <div class="field"><label>Section label shown to businesses</label><input id="f_menu_label" value="${esc(c.menu_label || "Menu")}" placeholder="e.g. Menu, Price List, Services"></div>
+        <div class="field"><label>Section label shown to visitors</label><input id="f_menu_label" value="${esc(c.menu_label || "Menu")}" placeholder="e.g. Menu, Price List, Services"></div>
         <p class="hint" style="margin-bottom:10px;">Two ways to do this, use either or both: upload a photo of an existing printed menu, and/or type items in manually below.</p>
         <div class="field">
           <label>Upload a menu photo</label>
@@ -1407,7 +1407,7 @@ function customerFormFieldsHtml(c, existing){
 
       <div class="section-label" style="margin-top:22px;">Gallery / portfolio (optional — name it whatever fits: Gallery, Our Work, Listings, Menu Photos…)</div>
       <div class="field">
-        <label>Section title shown to businesses</label>
+        <label>Section title shown to visitors</label>
         <input id="f_portfolio_title" value="${esc(c.portfolio_title || "Recent work")}" placeholder="e.g. Recent work, Gallery, Property Listings">
       </div>
       <div id="portfolioRowsHolder"></div>
