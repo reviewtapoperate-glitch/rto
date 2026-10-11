@@ -161,6 +161,22 @@ BEGIN
   IF to_regprocedure('public.rto_system_analytics()') IS NULL THEN
     RAISE EXCEPTION 'Platform analytics aggregation function missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customers' AND column_name='booking_enabled' AND data_type='boolean') THEN
+    RAISE EXCEPTION 'customers.booking_enabled missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='page_events' AND column_name='source') THEN
+    RAISE EXCEPTION 'page_events.source missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='access_code_reset_requests' AND rowsecurity) THEN
+    RAISE EXCEPTION 'access_code_reset_requests must have RLS enabled';
+  END IF;
+  IF has_table_privilege('anon','public.access_code_reset_requests','SELECT')
+     OR has_table_privilege('authenticated','public.access_code_reset_requests','INSERT') THEN
+    RAISE EXCEPTION 'Direct client privileges remain on access-code reset requests';
+  END IF;
+  IF to_regprocedure('public.rto_system_analytics()') IS NULL THEN
+    RAISE EXCEPTION 'Platform analytics aggregation function missing';
+  END IF;
   RAISE NOTICE 'RTO migration smoke tests passed';
 END $$;
 SQL
