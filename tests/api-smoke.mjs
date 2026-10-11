@@ -101,6 +101,12 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === "/rest/v1/members" && method === "GET") {
     const phone = url.searchParams.get("phone")?.replace("eq.", "");
     const id = url.searchParams.get("id")?.replace("eq.", "");
+    const orFilter = url.searchParams.get("or");
+    if (orFilter) {
+      // The production reset flow queries multiple accepted phone formats via PostgREST's OR filter.
+      const candidates = [...orFilter.matchAll(/phone\.eq\.([^,()]+)/g)].map(match => decodeURIComponent(match[1]));
+      return Response.json(members.filter(member => candidates.includes(member.phone)));
+    }
     const row = members.find(m => (phone && m.phone === phone) || (id && m.id === id));
     return Response.json(row ? [row] : []);
   }
