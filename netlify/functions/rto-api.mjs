@@ -243,7 +243,7 @@ export async function handleRtoApi(request, context) {
       const session = await readSession(request, sessionSecret);
       if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
       const requestId = String(body?.requestId || "");
-      if (!/^\\d+$/.test(requestId)) return json({ error: "Invalid reset request." }, 400);
+      if (!/^\d+$/.test(requestId)) return json({ error: "Invalid reset request." }, 400);
       const requests = await supabaseRequest("access_code_reset_requests?select=id,member_id,status&id=eq." + encodeURIComponent(requestId) + "&limit=1");
       const resetRequest = Array.isArray(requests) ? requests[0] : null;
       if (!resetRequest || resetRequest.status !== "pending" || !resetRequest.member_id) return json({ error: "This request cannot be completed. Verify the account details first." }, 404);
