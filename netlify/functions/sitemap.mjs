@@ -11,12 +11,10 @@ export default async () => {
     if (!response.ok) throw new Error("Business listing query failed");
     const rows = await response.json();
     const urls = [
-      `<url><loc>${baseUrl}/</loc></url>`,
-      ...(Array.isArray(rows) ? rows : []).filter(row => /^[a-z0-9-]{1,80}$/.test(String(row.slug || ""))).map(row => {
-        const loc = baseUrl + "/?c=" + encodeURIComponent(row.slug);
-        const lastmod = row.created_at ? `<lastmod>${new Date(row.created_at).toISOString()}</lastmod>` : "";
-        return `<url><loc>${loc}</loc>${lastmod}</url>`;
-      })
+      \`<url><loc>\${baseUrl}/</loc></url>\`,
+      ...(Array.isArray(rows) ? rows : [])
+        .filter(row => /^[a-z0-9-]{1,80}$/.test(String(row.slug || "")))
+        .map(row => \`<url><loc>\${baseUrl}/?c=\${encodeURIComponent(row.slug)}</loc></url>\`)
     ];
     const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`;
     return new Response(xml, { status: 200, headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=900, s-maxage=900" } });
