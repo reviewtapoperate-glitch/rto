@@ -55,6 +55,14 @@ function clearCookie() {
 function normalizePhone(value) {
   return String(value || "").replace(/[^\d+]/g, "").trim();
 }
+function canonicalPhoneForMatch(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("254") && digits.length === 12) return digits;
+  if (digits.startsWith("0") && digits.length === 10) return "254" + digits.slice(1);
+  if (/^[17]\d{8}$/.test(digits)) return "254" + digits;
+  return digits;
+}
 function randomAccessCode() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(8));
@@ -225,18 +233,26 @@ export async function handleRtoApi(request, context) {
       const name = String(body?.name || "").trim().slice(0, 100);
       const phone = normalizePhone(body?.phone);
       if (name.length < 2 || phone.length < 7 || phone.length > 20) return json({ error: "Enter the name and phone number used for the account." }, 400);
-      const rows = await supabaseRequest("members?select=id,name,phone&phone=eq." + encodeURIComponent(phone) + "&limit=1");
-      const member = Array.isArray(rows) ? rows[0] : null;
-      if (member && member.name.trim().toLowerCase() === name.toLowerCase()) {
-        await supabaseRequest("access_code_reset_requests", "POST", { member_id: member.id, member_name: member.name, phone, status: "pending" });
+      const rows = await supabaseRequest("members?select=id,name,phone&limit=1000");
+      const submittedPhone = canonicalPhoneForMatch(phone);
+      const matchingMembers = Array.isArray(rows) ? rows.filter(member =>
+        canonicalPhoneForMatch(member.phone) === submittedPhone &&
+        String(member.name || "").trim().toLowerCase() === name.toLowerCase()
+      ) : [];
+      // Keep account-existence details private. Only record an unambiguous name + phone match.
+      if (matchingMembers.length === 1) {
+        const member = matchingMembers[0];
+        const inserted = await supabaseRequest("access_code_reset_requests", "POST", {
+          member_id: member.id, member_name: member.name, phone: member.phone, status: "pending"
+        });
+        if (!Array.isArray(inserted) || !inserted.length) throw new Error("Reset request could not be recorded.");
       }
-      // Same response whether or not the account exists; staff verify the request out of band before issuing a replacement.
       return json({ ok: true, message: "If the details match an account, a reset request has been recorded. ReviewTapOperate support must verify ownership before issuing a replacement code." });
     }
     if (action === "admin-reset-requests") {
       const session = await readSession(request, sessionSecret);
       if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
-      const rows = await supabaseRequest("access_code_reset_requests?select=id,member_id,member_name,phone,status,created_at&status=eq.pending&order=created_at.asc&limit=200");
+      const rows = await supabaseRequest("access_code_reset_requests?select=id,member_id,member_name,phone,status,created_at,resolved_at&order=created_at.desc&limit=200");
       return json({ requests: Array.isArray(rows) ? rows : [] });
     }
     if (action === "admin-member-reset") {
@@ -249,9 +265,20 @@ export async function handleRtoApi(request, context) {
       if (!resetRequest || resetRequest.status !== "pending" || !resetRequest.member_id) return json({ error: "This request cannot be completed. Verify the account details first." }, 404);
       const code = randomAccessCode();
       const codeHash = await hashCredential(code);
-      await supabaseRequest("members?id=eq." + encodeURIComponent(resetRequest.member_id), "PATCH", { access_code: null, access_code_hash: codeHash });
-      await supabaseRequest("access_code_reset_requests?id=eq." + encodeURIComponent(requestId), "PATCH", { status: "resolved", resolved_at: new Date().toISOString() });
+      const updatedMember = await supabaseRequest("members?id=eq." + encodeURIComponent(resetRequest.member_id), "PATCH", { access_code: null, access_code_hash: codeHash });
+      if (!Array.isArray(updatedMember) || !updatedMember.length) return json({ error: "The member account could not be updated. The request remains pending." }, 409);
+      const updatedRequest = await supabaseRequest("access_code_reset_requests?id=eq." + encodeURIComponent(requestId) + "&status=eq.pending", "PATCH", { status: "resolved", resolved_at: new Date().toISOString() });
+      if (!Array.isArray(updatedRequest) || !updatedRequest.length) return json({ error: "The code was updated, but the request status could not be confirmed. Refresh the request list before retrying." }, 409);
       return json({ ok: true, code });
+    }
+    if (action === "admin-member-reset-reject") {
+      const session = await readSession(request, sessionSecret);
+      if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
+      const requestId = String(body?.requestId || "");
+      if (!/^\d+$/.test(requestId)) return json({ error: "Invalid reset request." }, 400);
+      const rows = await supabaseRequest("access_code_reset_requests?id=eq." + encodeURIComponent(requestId) + "&status=eq.pending", "PATCH", { status: "rejected", resolved_at: new Date().toISOString() });
+      if (!Array.isArray(rows) || !rows.length) return json({ error: "This request is no longer pending." }, 409);
+      return json({ ok: true });
     }
     if (action === "public-customer") {
       const slug = String(body?.slug || "").trim().toLowerCase();
@@ -302,10 +329,10 @@ export async function handleRtoApi(request, context) {
       if (!session || session.role !== "admin") return json({ error: "Administrator sign-in required." }, 403);
       const slug = String(body?.slug || "").trim().toLowerCase();
       if (!/^[a-z0-9-]{1,80}$/.test(slug)) return json({ error: "Invalid business link." }, 400);
-      await supabaseRequest("bookings?business_slug=eq." + encodeURIComponent(slug), "DELETE");
-      await supabaseRequest("reviews?business_slug=eq." + encodeURIComponent(slug), "DELETE");
-      await supabaseRequest("page_events?slug=eq." + encodeURIComponent(slug), "DELETE");
-      await supabaseRequest("customers?slug=eq." + encodeURIComponent(slug), "DELETE");
+      const deleted = await supabaseRequest("rpc/rto_delete_customer", "POST", { p_slug: slug });
+      if (!(deleted === true || (Array.isArray(deleted) && deleted[0] === true))) {
+        return json({ error: "Business was not found or could not be deleted." }, 404);
+      }
       return json({ ok: true });
     }
     if (action === "reviews-list") {
@@ -395,8 +422,8 @@ export async function handleRtoApi(request, context) {
       const session = await readSession(request, sessionSecret);
       const slug = String(body?.slug || "").trim().toLowerCase();
       if (!session || !["admin", "owner"].includes(session.role) || !/^[a-z0-9-]{1,80}$/.test(slug) || (session.role === "owner" && session.slug !== slug)) return json({ error: "Not authorized to view analytics." }, 403);
-      const rows = await supabaseRequest("page_events?select=event_type,link_label,source,created_at&slug=eq." + encodeURIComponent(slug) + "&order=created_at.desc&limit=10000");
-      return json({ events: Array.isArray(rows) ? rows : [] });
+      const summary = await supabaseRequest("rpc/rto_business_analytics", "POST", { p_slug: slug });
+      return json(summary && typeof summary === "object" ? summary : {});
     }
     if (action === "upload-image") {
       const session = await readSession(request, sessionSecret);
