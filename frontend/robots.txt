@@ -1,2 +1,3 @@
 User-agent: *
 Allow: /
+Sitemap: https://reviewtapoperate.netlify.app/sitemap.xml
