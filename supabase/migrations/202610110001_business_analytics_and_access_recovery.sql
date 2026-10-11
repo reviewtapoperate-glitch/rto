@@ -32,3 +32,38 @@ grant usage, select on sequence public.access_code_reset_requests_id_seq to serv
 
 -- All application access goes through the server API using the service role.
 -- No browser role receives direct access to this reset-request table.
+
+create or replace function public.rto_system_analytics()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'businesses', (select count(*) from public.customers),
+    'listedBusinesses', (select count(*) from public.customers where listed_in_directory is distinct from false),
+    'members', (select count(*) from public.members),
+    'bookings', (select count(*) from public.bookings),
+    'pendingBookings', (select count(*) from public.bookings where status = 'pending'),
+    'eventCount', (select count(*) from public.page_events),
+    'sourceCounts', coalesce((
+      select jsonb_object_agg(source_name, total)
+      from (
+        select coalesce(nullif(source, ''), 'unknown') as source_name, count(*) as total
+        from public.page_events
+        group by coalesce(nullif(source, ''), 'unknown')
+      ) sources
+    ), '{}'::jsonb),
+    'eventCounts', coalesce((
+      select jsonb_object_agg(event_name, total)
+      from (
+        select coalesce(nullif(event_type, ''), 'unknown') as event_name, count(*) as total
+        from public.page_events
+        group by coalesce(nullif(event_type, ''), 'unknown')
+      ) events
+    ), '{}'::jsonb)
+  );
+$$;
+
+revoke all on function public.rto_system_analytics() from public, anon, authenticated;
+grant execute on function public.rto_system_analytics() to service_role;
