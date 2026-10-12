@@ -200,8 +200,12 @@ async function requestMemberAccessReset(){
   if (!phone) { toast("Enter your registered phone number"); return; }
   try {
     const result = await rtoApi("member-reset-request", { phone });
-    window.__rtoRecoveryChallengeId = result.challengeId;
     const body = document.getElementById("memberAuthBody");
+    if (result.mode === "manual") {
+      if (body) body.innerHTML = `<p style="font-weight:700;">Reset request received</p><p class="hint">${esc(result.message || "If this number is registered, support will verify ownership before issuing a replacement code.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
+      return;
+    }
+    window.__rtoRecoveryChallengeId = result.challengeId;
     if (body) body.innerHTML = `<p style="font-weight:700;margin:0 0 4px;">Verify your phone</p><p class="hint" style="margin-bottom:14px;">${esc(result.message || "If this number is registered, a verification code will be sent by SMS.")}</p><div class="field" style="text-align:left;"><label>6-digit SMS verification code</label><input id="ma_reset_otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div><button class="btn" onclick="verifyMemberAccessReset()">Verify and send replacement code</button><button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('forgot')">Try another number</button><button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Back to login</button>`;
   } catch (error) { toast(error.message || "Couldn't start access-code recovery."); }
 }
