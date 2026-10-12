@@ -22,7 +22,7 @@ const slug = params.get("c");
 const editSlug = params.get("edit");
 
 async function rtoApi(action, payload = {}) {
-  const authActions = new Set(["admin-login", "owner-login", "owner-login-by-code", "member-signup", "member-login", "member-reset-request", "business-signup", "admin-owner-code", "logout"]);
+  const authActions = new Set(["admin-login", "owner-login", "owner-login-by-code", "member-signup", "member-login", "member-reset-request", "member-reset-verify", "business-signup", "admin-owner-code", "logout"]);
   const endpoint = authActions.has(action) ? "/.netlify/functions/rto-auth" : "/.netlify/functions/rto-api";
   const response = await fetch(endpoint, {
     method: "POST",
@@ -134,11 +134,10 @@ function renderMemberAuthTab(tab){
   if (!body) return;
   if (tab === "forgot") {
     body.innerHTML = `
-      <p style="font-weight:700;margin:0 0 4px;">Request an access-code reset</p>
-      <p class="hint" style="margin-bottom:14px;">Enter the same name and phone number used to register. Support will verify account ownership before issuing a replacement code.</p>
-      <div class="field" style="text-align:left;"><label>Your name</label><input id="ma_reset_name" autocomplete="name"></div>
-      <div class="field" style="text-align:left;"><label>Phone number</label><input id="ma_reset_phone" autocomplete="tel"></div>
-      <button class="btn" onclick="requestMemberAccessReset()">Submit reset request</button>
+      <p style="font-weight:700;margin:0 0 4px;">Forgot access code?</p>
+      <p class="hint" style="margin-bottom:14px;">Enter the phone number registered to your account. We'll send a verification code by SMS if the number matches an account.</p>
+      <div class="field" style="text-align:left;"><label>Registered phone number</label><input id="ma_reset_phone" autocomplete="tel" inputmode="tel"></div>
+      <button class="btn" onclick="requestMemberAccessReset()">Send verification code</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Back to login</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="closeMemberAuthModal()">Cancel</button>`;
   } else if (tab === "login") {
@@ -196,15 +195,27 @@ function finishMemberSignup(){
   if (window.__memberAuthSuccessCb) window.__memberAuthSuccessCb();
 }
 async function requestMemberAccessReset(){
-  if (blockPreviewWrite("Access-code reset requests are disabled in the verification preview.")) return;
-  const name = document.getElementById("ma_reset_name").value.trim();
+  if (blockPreviewWrite("Access-code recovery is disabled in the verification preview.")) return;
   const phone = document.getElementById("ma_reset_phone").value.trim();
-  if (!name || !phone) { toast("Enter your name and phone number"); return; }
+  if (!phone) { toast("Enter your registered phone number"); return; }
   try {
-    const result = await rtoApi("member-reset-request", { name, phone });
+    const result = await rtoApi("member-reset-request", { phone });
+    window.__rtoRecoveryChallengeId = result.challengeId;
     const body = document.getElementById("memberAuthBody");
-    if (body) body.innerHTML = `<p style="font-weight:700;">Reset request received</p><p class="hint">${esc(result.message || "If the details match an account, support will verify ownership before issuing a replacement code.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
-  } catch (error) { toast(error.message || "Couldn't submit the reset request."); }
+    if (body) body.innerHTML = `<p style="font-weight:700;margin:0 0 4px;">Verify your phone</p><p class="hint" style="margin-bottom:14px;">${esc(result.message || "If this number is registered, a verification code will be sent by SMS.")}</p><div class="field" style="text-align:left;"><label>6-digit SMS verification code</label><input id="ma_reset_otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div><button class="btn" onclick="verifyMemberAccessReset()">Verify and send replacement code</button><button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('forgot')">Try another number</button><button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Back to login</button>`;
+  } catch (error) { toast(error.message || "Couldn't start access-code recovery."); }
+}
+async function verifyMemberAccessReset(){
+  if (blockPreviewWrite("Access-code recovery is disabled in the verification preview.")) return;
+  const challengeId = window.__rtoRecoveryChallengeId || "";
+  const code = document.getElementById("ma_reset_otp").value.trim();
+  if (!/^\\d{6}$/.test(code)) { toast("Enter the 6-digit code sent by SMS"); return; }
+  try {
+    const result = await rtoApi("member-reset-verify", { challengeId, code });
+    const body = document.getElementById("memberAuthBody");
+    window.__rtoRecoveryChallengeId = null;
+    if (body) body.innerHTML = `<p style="font-weight:700;">Access code reset complete</p><p class="hint">${esc(result.message || "Your replacement access code has been sent to your registered phone.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
+  } catch (error) { toast(error.message || "The code is invalid or expired. Request another code."); }
 }
 async function doMemberLogin(){
   if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
