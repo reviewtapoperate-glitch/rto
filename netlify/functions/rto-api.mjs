@@ -1,3 +1,4 @@
+import { sendRecoverySms, isRecoverySmsConfigured } from "./rto-sms.mjs";
 const SESSION_COOKIE = "rto_session";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
@@ -62,6 +63,12 @@ function canonicalPhoneForMatch(value) {
   if (digits.startsWith("0") && digits.length === 10) return "254" + digits.slice(1);
   if (/^[17]\d{8}$/.test(digits)) return "254" + digits;
   return digits;
+}
+function randomNumericCode() {
+  const limit = Math.floor(0x100000000 / 1000000) * 1000000;
+  let value;
+  do { value = crypto.getRandomValues(new Uint32Array(1))[0]; } while (value >= limit);
+  return String(value % 1000000).padStart(6, "0");
 }
 function randomAccessCode() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -230,34 +237,129 @@ export async function handleRtoApi(request, context) {
       return json({ ok: true, member }, 200, { "set-cookie": sessionCookie(token) });
     }
     if (action === "member-reset-request") {
-      const name = String(body?.name || "").trim().slice(0, 100);
       const phone = normalizePhone(body?.phone);
-      if (name.length < 2 || phone.length < 7 || phone.length > 20) return json({ error: "Enter the name and phone number used for the account." }, 400);
+      if (phone.length < 7 || phone.length > 20) return json({ error: "Enter the phone number registered to your account." }, 400);
+      if (!isRecoverySmsConfigured()) return json({ error: "SMS recovery is not configured yet. Please contact support." }, 503);
+      const challengeId = crypto.randomUUID();
       const submittedPhone = canonicalPhoneForMatch(phone);
-      const submittedDigits = phone.replace(/\D/g, "");
+      const submittedDigits = phone.replace(/\\D/g, "");
       const candidates = [...new Set([
         submittedDigits,
         submittedPhone,
         submittedPhone ? "+" + submittedPhone : "",
         submittedPhone.startsWith("254") ? "0" + submittedPhone.slice(3) : ""
-      ].filter(value => /^\+?\d{7,15}$/.test(value)))];
+      ].filter(value => /^\\+?\\d{7,15}$/.test(value)))];
       const phoneFilter = candidates.map(value => "phone.eq." + encodeURIComponent(value)).join(",");
       const rows = candidates.length
         ? await supabaseRequest("members?select=id,name,phone&or=(" + phoneFilter + ")&limit=100")
         : [];
       const matchingMembers = Array.isArray(rows) ? rows.filter(member =>
-        canonicalPhoneForMatch(member.phone) === submittedPhone &&
-        String(member.name || "").trim().toLowerCase() === name.toLowerCase()
+        canonicalPhoneForMatch(member.phone) === submittedPhone
       ) : [];
-      // Keep account-existence details private. Only record an unambiguous name + phone match.
       if (matchingMembers.length === 1) {
         const member = matchingMembers[0];
-        const inserted = await supabaseRequest("access_code_reset_requests", "POST", {
-          member_id: member.id, member_name: member.name, phone: member.phone, status: "pending"
-        });
-        if (!Array.isArray(inserted) || !inserted.length) throw new Error("Reset request could not be recorded.");
+        const canonicalRegisteredPhone = canonicalPhoneForMatch(member.phone);
+        const now = Date.now();
+        const recent15m = await supabaseRequest(
+          "access_code_recovery_challenges?select=challenge_id&phone=eq." + encodeURIComponent(canonicalRegisteredPhone) +
+          "&created_at=gte." + encodeURIComponent(new Date(now - 15 * 60 * 1000).toISOString()) + "&limit=4"
+        );
+        const recent24h = await supabaseRequest(
+          "access_code_recovery_challenges?select=challenge_id&phone=eq." + encodeURIComponent(canonicalRegisteredPhone) +
+          "&created_at=gte." + encodeURIComponent(new Date(now - 24 * 60 * 60 * 1000).toISOString()) + "&limit=11"
+        );
+        if ((!Array.isArray(recent15m) || recent15m.length < 3) && (!Array.isArray(recent24h) || recent24h.length < 10)) {
+          const otp = randomNumericCode();
+          await supabaseRequest("access_code_recovery_challenges", "POST", {
+            challenge_id: challengeId,
+            member_id: member.id,
+            phone: canonicalRegisteredPhone,
+            otp_hash: await hashCredential("sms-recovery:" + challengeId + ":" + otp),
+            status: "pending",
+            attempts: 0,
+            expires_at: new Date(now + 10 * 60 * 1000).toISOString()
+          });
+          const sms = await sendRecoverySms({
+            phone: "+" + canonicalRegisteredPhone,
+            message: "Your ReviewTapOperate verification code is " + otp + ". It expires in 10 minutes. Do not share it."
+          });
+          if (!sms.ok) {
+            await supabaseRequest(
+              "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) + "&status=eq.pending",
+              "PATCH",
+              { status: "delivery_failed" }
+            );
+          }
+        }
       }
-      return json({ ok: true, message: "If the details match an account, a reset request has been recorded. ReviewTapOperate support must verify ownership before issuing a replacement code." });
+      return json({
+        ok: true,
+        challengeId,
+        message: "If this number is registered and SMS delivery is available, a verification code will be sent. Enter it here to continue."
+      });
+    }
+    if (action === "member-reset-verify") {
+      const challengeId = String(body?.challengeId || "");
+      const otp = String(body?.code || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^\\d{6}$/.test(otp)) {
+        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
+      }
+      const challenges = await supabaseRequest(
+        "access_code_recovery_challenges?select=challenge_id,member_id,phone,otp_hash,status,attempts,expires_at&challenge_id=eq." +
+        encodeURIComponent(challengeId) + "&limit=1"
+      );
+      const challenge = Array.isArray(challenges) ? challenges[0] : null;
+      const now = Date.now();
+      if (!challenge || challenge.status !== "pending" || !challenge.expires_at || Date.parse(challenge.expires_at) <= now || Number(challenge.attempts) >= 5) {
+        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
+      }
+      const submittedHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
+      const attempts = Number(challenge.attempts) || 0;
+      if (!constantTimeEqual(String(challenge.otp_hash || ""), submittedHash)) {
+        const nextAttempts = attempts + 1;
+        await supabaseRequest(
+          "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) +
+          "&status=eq.pending&attempts=eq." + attempts,
+          "PATCH",
+          { attempts: nextAttempts, ...(nextAttempts >= 5 ? { status: "locked" } : {}) }
+        );
+        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
+      }
+      const verified = await supabaseRequest(
+        "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) +
+        "&status=eq.pending&attempts=eq." + attempts + "&expires_at=gt." + encodeURIComponent(new Date(now).toISOString()),
+        "PATCH",
+        { status: "verified", verified_at: new Date(now).toISOString() }
+      );
+      if (!Array.isArray(verified) || verified.length !== 1) {
+        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
+      }
+      const replacementCode = randomAccessCode();
+      const replacementHash = await hashCredential(replacementCode);
+      const delivery = await sendRecoverySms({
+        phone: "+" + String(challenge.phone),
+        message: "Your new ReviewTapOperate access code is " + replacementCode + ". Keep it private. If you did not request this, contact support."
+      });
+      if (!delivery.ok) {
+        await supabaseRequest(
+          "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) + "&status=eq.verified",
+          "PATCH",
+          { status: "delivery_failed" }
+        );
+        return json({ error: "We couldn't deliver your replacement code. Please request recovery again or contact support." }, 503);
+      }
+      const completed = await supabaseRequest("rpc/rto_complete_sms_access_recovery", "POST", {
+        p_challenge_id: challengeId,
+        p_code_hash: replacementHash
+      });
+      if (!(completed === true || (Array.isArray(completed) && completed[0] === true))) {
+        await sendRecoverySms({
+          phone: "+" + String(challenge.phone),
+          message: "Your previous ReviewTapOperate recovery could not be completed. Please ignore the previous code and request recovery again."
+        });
+        return json({ error: "Recovery could not be completed. Please request a new code or contact support." }, 409);
+      }
+      return json({ ok: true, message: "Your replacement access code has been sent to your registered phone. For your security, it is not displayed on this screen." });
     }
     if (action === "admin-reset-requests") {
       const session = await readSession(request, sessionSecret);
