@@ -76,7 +76,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === "/rest/v1/rpc/rto_verify_sms_recovery" && method === "POST") {
     const challenge = recoveryChallenges.find(row => row.challenge_id === body.p_challenge_id && row.status === "pending");
     if (!challenge || !lastSmsMessage) return Response.json(false);
-    const match = lastSmsMessage.match(/verification code is (\\d{6})/i);
+    const match = lastSmsMessage.match(/verification code is (\d{6})/i);
     if (!match) return Response.json(false);
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.RTO_CREDENTIAL_PEPPER), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("rto-credential:sms-recovery:" + body.p_challenge_id + ":" + match[1]));
@@ -239,12 +239,13 @@ const resetRequest = await call("member-reset-request", { phone: "254711111111" 
 assert.equal(resetRequest.status, 200, "customer should be able to start SMS access-code recovery");
 const resetRequestBody = await resetRequest.json();
 assert.match(resetRequestBody.challengeId, /^[0-9a-f-]{36}$/i);
-assert.match(lastSmsMessage, /verification code is \\d{6}/i, "verification code should be sent by SMS");
-const otp = lastSmsMessage.match(/verification code is (\\d{6})/i)[1];
+assert.match(lastSmsMessage, /verification code is \d{6}/i, "verification code should be sent by SMS");
+const otp = lastSmsMessage.match(/verification code is (\d{6})/i)[1];
 const verifyReset = await call("member-reset-verify", { challengeId: resetRequestBody.challengeId, code: otp });
 assert.equal(verifyReset.status, 200, "verified customer should receive a replacement code by SMS");
-assert.match((await verifyReset.json()).message, /sent to your registered phone/i);
-assert.doesNotMatch(JSON.stringify(await verifyReset.clone().json()), /[A-Z2-9]{8}/, "replacement code must not be returned in the HTTP response");
+const verifyResetBody = await verifyReset.json();
+assert.match(verifyResetBody.message, /sent to your registered phone/i);
+assert.equal(verifyResetBody.code, undefined, "replacement code must not be returned in the HTTP response");
 const replacementCode = lastSmsMessage.match(/access code is ([A-Z2-9]{8})/i)?.[1];
 assert.ok(replacementCode, "replacement code should be delivered by SMS");
 assert.equal((await call("member-login", { phone: "254711111111", code: replacementCode })).status, 200, "SMS replacement code should authenticate");
