@@ -103,6 +103,38 @@ test("administrator reset list includes resolved and rejected request history", 
   } finally { globalThis.fetch = oldFetch; }
 });
 
+test("administrator reset updates the member and resolves the request through one atomic RPC", async () => {
+  const oldFetch = globalThis.fetch;
+  const cookie = await sessionCookie("admin");
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const parsed = new URL(String(url));
+    calls.push({ url: parsed, method: init.method || "GET", body: init.body ? JSON.parse(init.body) : null });
+    assert.ok(parsed.pathname.endsWith("/rpc/rto_resolve_access_code_reset"));
+    return jsonResponse(true);
+  };
+  try {
+    const response = await handleRtoApi(request("admin-member-reset", { requestId: "42" }, cookie), { deploy: { context: "production" } });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.ok(result.code, "replacement code is returned only after the atomic RPC succeeds");
+    assert.equal(calls.length, 1, "credential and request state are changed by one database transaction");
+    assert.deepEqual(calls[0].body, { p_request_id: 42, p_code_hash: calls[0].body.p_code_hash });
+    assert.match(calls[0].body.p_code_hash, /^hmac-sha256:[A-Za-z0-9_-]{43}$/);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+test("administrator reset does not disclose a code when the atomic RPC declines the request", async () => {
+  const oldFetch = globalThis.fetch;
+  const cookie = await sessionCookie("admin");
+  globalThis.fetch = async () => jsonResponse(false);
+  try {
+    const response = await handleRtoApi(request("admin-member-reset", { requestId: "42" }, cookie), { deploy: { context: "production" } });
+    assert.equal(response.status, 409);
+    assert.equal(Object.hasOwn(await response.json(), "code"), false);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
 test("business deletion rejects unauthenticated requests before database writes", async () => {
   const oldFetch = globalThis.fetch;
   let called = false;
