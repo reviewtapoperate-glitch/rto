@@ -213,7 +213,7 @@ async function verifyMemberAccessReset(){
   if (blockPreviewWrite("Access-code recovery is disabled in the verification preview.")) return;
   const challengeId = window.__rtoRecoveryChallengeId || "";
   const code = document.getElementById("ma_reset_otp").value.trim();
-  if (!/^\\d{6}$/.test(code)) { toast("Enter the 6-digit code sent by SMS"); return; }
+  if (!/^\d{6}$/.test(code)) { toast("Enter the 6-digit code sent by SMS"); return; }
   try {
     const result = await rtoApi("member-reset-verify", { challengeId, code });
     const body = document.getElementById("memberAuthBody");
