@@ -260,25 +260,17 @@ export async function handleRtoApi(request, context) {
         const member = matchingMembers[0];
         const canonicalRegisteredPhone = canonicalPhoneForMatch(member.phone);
         const now = Date.now();
-        const recent15m = await supabaseRequest(
-          "access_code_recovery_challenges?select=challenge_id&phone=eq." + encodeURIComponent(canonicalRegisteredPhone) +
-          "&created_at=gte." + encodeURIComponent(new Date(now - 15 * 60 * 1000).toISOString()) + "&limit=4"
-        );
-        const recent24h = await supabaseRequest(
-          "access_code_recovery_challenges?select=challenge_id&phone=eq." + encodeURIComponent(canonicalRegisteredPhone) +
-          "&created_at=gte." + encodeURIComponent(new Date(now - 24 * 60 * 60 * 1000).toISOString()) + "&limit=11"
-        );
-        if ((!Array.isArray(recent15m) || recent15m.length < 3) && (!Array.isArray(recent24h) || recent24h.length < 10)) {
-          const otp = randomNumericCode();
-          await supabaseRequest("access_code_recovery_challenges", "POST", {
-            challenge_id: challengeId,
-            member_id: member.id,
-            phone: canonicalRegisteredPhone,
-            otp_hash: await hashCredential("sms-recovery:" + challengeId + ":" + otp),
-            status: "pending",
-            attempts: 0,
-            expires_at: new Date(now + 10 * 60 * 1000).toISOString()
-          });
+        const otp = randomNumericCode();
+        const expiresAt = new Date(now + 10 * 60 * 1000).toISOString();
+        const otpHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
+        const created = await supabaseRequest("rpc/rto_create_sms_recovery_challenge", "POST", {
+          p_challenge_id: challengeId,
+          p_member_id: member.id,
+          p_phone: canonicalRegisteredPhone,
+          p_otp_hash: otpHash,
+          p_expires_at: expiresAt
+        });
+        if (created === true || (Array.isArray(created) && created[0] === true)) {
           const sms = await sendRecoverySms({
             phone: "+" + canonicalRegisteredPhone,
             message: "Your ReviewTapOperate verification code is " + otp + ". It expires in 10 minutes. Do not share it."
@@ -304,34 +296,20 @@ export async function handleRtoApi(request, context) {
       if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^\\d{6}$/.test(otp)) {
         return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
       }
+      const submittedHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
+      const verified = await supabaseRequest("rpc/rto_verify_sms_recovery", "POST", {
+        p_challenge_id: challengeId,
+        p_otp_hash: submittedHash
+      });
+      if (!(verified === true || (Array.isArray(verified) && verified[0] === true))) {
+        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
+      }
       const challenges = await supabaseRequest(
-        "access_code_recovery_challenges?select=challenge_id,member_id,phone,otp_hash,status,attempts,expires_at&challenge_id=eq." +
-        encodeURIComponent(challengeId) + "&limit=1"
+        "access_code_recovery_challenges?select=challenge_id,member_id,phone,status,expires_at&challenge_id=eq." +
+        encodeURIComponent(challengeId) + "&status=eq.verified&limit=1"
       );
       const challenge = Array.isArray(challenges) ? challenges[0] : null;
-      const now = Date.now();
-      if (!challenge || challenge.status !== "pending" || !challenge.expires_at || Date.parse(challenge.expires_at) <= now || Number(challenge.attempts) >= 5) {
-        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
-      }
-      const submittedHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
-      const attempts = Number(challenge.attempts) || 0;
-      if (!constantTimeEqual(String(challenge.otp_hash || ""), submittedHash)) {
-        const nextAttempts = attempts + 1;
-        await supabaseRequest(
-          "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) +
-          "&status=eq.pending&attempts=eq." + attempts,
-          "PATCH",
-          { attempts: nextAttempts, ...(nextAttempts >= 5 ? { status: "locked" } : {}) }
-        );
-        return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
-      }
-      const verified = await supabaseRequest(
-        "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) +
-        "&status=eq.pending&attempts=eq." + attempts + "&expires_at=gt." + encodeURIComponent(new Date(now).toISOString()),
-        "PATCH",
-        { status: "verified", verified_at: new Date(now).toISOString() }
-      );
-      if (!Array.isArray(verified) || verified.length !== 1) {
+      if (!challenge || !challenge.phone) {
         return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
       }
       const replacementCode = randomAccessCode();
