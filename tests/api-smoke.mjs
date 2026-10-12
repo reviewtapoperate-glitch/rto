@@ -5,7 +5,9 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
   RTO_SESSION_SECRET: "a-test-session-secret-that-is-longer-than-32-characters",
   RTO_CREDENTIAL_PEPPER: "a-separate-test-credential-pepper-longer-than-32-characters",
-  RTO_ADMIN_PASSWORD: "Test-Only-Admin-Password-2026!"
+  RTO_ADMIN_PASSWORD: "Test-Only-Admin-Password-2026!",
+  AT_USERNAME: "test-user",
+  AT_API_KEY: "test-api-key"
 };
 globalThis.Netlify = { env: { get: (key) => env[key] } };
 
@@ -25,6 +27,8 @@ const reviews = [];
 const bookings = [];
 const events = [];
 const resetRequests = [];
+const recoveryChallenges = [];
+let lastSmsMessage = "";
 const calls = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(String(input));
@@ -65,6 +69,42 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === "/rest/v1/bookings" && method === "DELETE") return Response.json([]);
   if (url.pathname === "/rest/v1/page_events" && method === "POST") { const row = { id: events.length + 1, ...body }; events.push(row); return Response.json([row], { status: 201 }); }
   if (url.pathname === "/rest/v1/page_events" && method === "GET") return Response.json(events);
+  if (url.pathname === "/rest/v1/rpc/rto_create_sms_recovery_challenge" && method === "POST") {
+    recoveryChallenges.push({ challenge_id: body.p_challenge_id, member_id: body.p_member_id, phone: body.p_phone, otp_hash: body.p_otp_hash, status: "pending", attempts: 0, expires_at: body.p_expires_at });
+    return Response.json(true);
+  }
+  if (url.pathname === "/rest/v1/rpc/rto_verify_sms_recovery" && method === "POST") {
+    const challenge = recoveryChallenges.find(row => row.challenge_id === body.p_challenge_id && row.status === "pending");
+    if (!challenge || !lastSmsMessage) return Response.json(false);
+    const match = lastSmsMessage.match(/verification code is (\\d{6})/i);
+    if (!match) return Response.json(false);
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.RTO_CREDENTIAL_PEPPER), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("rto-credential:sms-recovery:" + body.p_challenge_id + ":" + match[1]));
+    const expected = "hmac-sha256:" + Buffer.from(signature).toString("base64url");
+    if (body.p_otp_hash !== expected) { challenge.attempts += 1; return Response.json(false); }
+    challenge.status = "verified";
+    challenge.verified_at = new Date().toISOString();
+    return Response.json(true);
+  }
+  if (url.pathname === "/rest/v1/rpc/rto_complete_sms_access_recovery" && method === "POST") {
+    const challenge = recoveryChallenges.find(row => row.challenge_id === body.p_challenge_id && row.status === "verified");
+    const member = challenge && members.find(row => row.id === challenge.member_id);
+    if (!member || !/^hmac-sha256:[A-Za-z0-9_-]{43}$/.test(body.p_code_hash)) return Response.json(false);
+    member.access_code = null;
+    member.access_code_hash = body.p_code_hash;
+    challenge.status = "completed";
+    challenge.completed_at = new Date().toISOString();
+    return Response.json(true);
+  }
+  if (url.pathname === "/rest/v1/access_code_recovery_challenges" && method === "GET") {
+    const id = url.searchParams.get("challenge_id")?.replace("eq.", "");
+    const status = url.searchParams.get("status")?.replace("eq.", "");
+    return Response.json(recoveryChallenges.filter(row => (!id || row.challenge_id === id) && (!status || row.status === status)));
+  }
+  if (url.hostname === "api.africastalking.com" && url.pathname === "/version1/messaging" && method === "POST") {
+    lastSmsMessage = new URLSearchParams(String(init.body || "")).get("message") || "";
+    return Response.json({ SMSMessageData: { Recipients: [{ statusCode: 102 }] } });
+  }
   if (url.pathname === "/rest/v1/rpc/rto_resolve_access_code_reset" && method === "POST") {
     assert.ok(body.p_request_id > 0, "atomic reset RPC receives the request id");
     assert.match(body.p_code_hash, /^hmac-sha256:/, "atomic reset RPC receives only the hashed replacement code");
@@ -195,18 +235,22 @@ assert.match(members[0].access_code_hash, /^hmac-sha256:/, "new member code must
 
 const memberLogin = await call("member-login", { phone: "254711111111", code: signupBody.accessCode });
 assert.equal(memberLogin.status, 200, "hashed member access code should authenticate");
-const resetRequest = await call("member-reset-request", { name: "Test Member", phone: "254711111111" });
-assert.equal(resetRequest.status, 200, "customer should be able to claim an access-code reset");
-assert.match((await resetRequest.json()).message, /replacement code/i);
+const resetRequest = await call("member-reset-request", { phone: "254711111111" });
+assert.equal(resetRequest.status, 200, "customer should be able to start SMS access-code recovery");
+const resetRequestBody = await resetRequest.json();
+assert.match(resetRequestBody.challengeId, /^[0-9a-f-]{36}$/i);
+assert.match(lastSmsMessage, /verification code is \\d{6}/i, "verification code should be sent by SMS");
+const otp = lastSmsMessage.match(/verification code is (\\d{6})/i)[1];
+const verifyReset = await call("member-reset-verify", { challengeId: resetRequestBody.challengeId, code: otp });
+assert.equal(verifyReset.status, 200, "verified customer should receive a replacement code by SMS");
+assert.match((await verifyReset.json()).message, /sent to your registered phone/i);
+assert.doesNotMatch(JSON.stringify(await verifyReset.clone().json()), /[A-Z2-9]{8}/, "replacement code must not be returned in the HTTP response");
+const replacementCode = lastSmsMessage.match(/access code is ([A-Z2-9]{8})/i)?.[1];
+assert.ok(replacementCode, "replacement code should be delivered by SMS");
+assert.equal((await call("member-login", { phone: "254711111111", code: replacementCode })).status, 200, "SMS replacement code should authenticate");
 const resetQueue = await call("admin-reset-requests", {}, adminCookie);
-assert.equal(resetQueue.status, 200, "administrator should be able to view reset requests");
-const resetRow = (await resetQueue.json()).requests[0];
-assert.ok(resetRow, "matching reset request should be available to the administrator");
-const resetCodeResponse = await call("admin-member-reset", { requestId: resetRow.id }, adminCookie);
-assert.equal(resetCodeResponse.status, 200, "administrator should issue a replacement only from a pending request");
-const replacementCode = (await resetCodeResponse.json()).code;
-assert.ok(replacementCode, "replacement code should be issued once");
-assert.equal((await call("member-login", { phone: "254711111111", code: replacementCode })).status, 200, "replacement code should authenticate");
+assert.equal(resetQueue.status, 200, "administrator should still be able to view manual exception requests");
+assert.equal((await resetQueue.json()).requests.length, 0, "automated SMS recovery should not create a manual reset request");
 const eventLog = await call("event-log", { slug: "demo", eventType: "view", source: "qr", label: null, referrer: "" });
 assert.equal(eventLog.status, 200);
 assert.equal(events[0].source, "qr", "event source attribution should be persisted");
