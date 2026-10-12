@@ -47,8 +47,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100005_lock
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100006_rto_storage_limits.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100007_repair_bigint_id_generation.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610110001_business_analytics_and_access_recovery.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610120002_atomic_access_code_reset.sql
 
-# Idempotency check: applying all seven forward migrations again must not fail.
+# Idempotency check: applying all forward migrations again must not fail.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100001_ensure_schedule_booking_fields.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100002_add_customer_address_maps.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100003_add_review_uniqueness_and_query_indexes.sql
@@ -57,6 +58,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100005_lock
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100006_rto_storage_limits.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610100007_repair_bigint_id_generation.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610110001_business_analytics_and_access_recovery.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202610120002_atomic_access_code_reset.sql
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$
