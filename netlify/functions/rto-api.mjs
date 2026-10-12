@@ -239,7 +239,7 @@ export async function handleRtoApi(request, context) {
     if (action === "member-reset-request") {
       const phone = normalizePhone(body?.phone);
       if (phone.length < 7 || phone.length > 20) return json({ error: "Enter the phone number registered to your account." }, 400);
-      if (!isRecoverySmsConfigured()) return json({ error: "SMS recovery is not configured yet. Please contact support." }, 503);
+      const smsConfigured = isRecoverySmsConfigured();
       const challengeId = crypto.randomUUID();
       const submittedPhone = canonicalPhoneForMatch(phone);
       const submittedDigits = phone.replace(/\D/g, "");
@@ -259,35 +259,45 @@ export async function handleRtoApi(request, context) {
       if (matchingMembers.length === 1) {
         const member = matchingMembers[0];
         const canonicalRegisteredPhone = canonicalPhoneForMatch(member.phone);
-        const now = Date.now();
-        const otp = randomNumericCode();
-        const expiresAt = new Date(now + 10 * 60 * 1000).toISOString();
-        const otpHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
-        const created = await supabaseRequest("rpc/rto_create_sms_recovery_challenge", "POST", {
-          p_challenge_id: challengeId,
-          p_member_id: member.id,
-          p_phone: canonicalRegisteredPhone,
-          p_otp_hash: otpHash,
-          p_expires_at: expiresAt
-        });
-        if (created === true || (Array.isArray(created) && created[0] === true)) {
-          const sms = await sendRecoverySms({
-            phone: "+" + canonicalRegisteredPhone,
-            message: "Your ReviewTapOperate verification code is " + otp + ". It expires in 10 minutes. Do not share it."
+        if (!smsConfigured) {
+          // Safe temporary fallback: retain administrator review until SMS credentials are configured.
+          await supabaseRequest("access_code_reset_requests", "POST", {
+            member_id: member.id, member_name: member.name, phone: member.phone, status: "pending"
           });
-          if (!sms.ok) {
-            await supabaseRequest(
-              "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) + "&status=eq.pending",
-              "PATCH",
-              { status: "delivery_failed" }
-            );
+        } else {
+          const now = Date.now();
+          const otp = randomNumericCode();
+          const expiresAt = new Date(now + 10 * 60 * 1000).toISOString();
+          const otpHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
+          const created = await supabaseRequest("rpc/rto_create_sms_recovery_challenge", "POST", {
+            p_challenge_id: challengeId,
+            p_member_id: member.id,
+            p_phone: canonicalRegisteredPhone,
+            p_otp_hash: otpHash,
+            p_expires_at: expiresAt
+          });
+          if (created === true || (Array.isArray(created) && created[0] === true)) {
+            const sms = await sendRecoverySms({
+              phone: "+" + canonicalRegisteredPhone,
+              message: "Your ReviewTapOperate verification code is " + otp + ". It expires in 10 minutes. Do not share it."
+            });
+            if (!sms.ok) {
+              await supabaseRequest(
+                "access_code_recovery_challenges?challenge_id=eq." + encodeURIComponent(challengeId) + "&status=eq.pending",
+                "PATCH",
+                { status: "delivery_failed" }
+              );
+            }
           }
         }
       }
       return json({
         ok: true,
+        mode: smsConfigured ? "sms" : "manual",
         challengeId,
-        message: "If this number is registered and SMS delivery is available, a verification code will be sent. Enter it here to continue."
+        message: smsConfigured
+          ? "If this number is registered and SMS delivery is available, a verification code will be sent. Enter it here to continue."
+          : "If this number is registered, a reset request has been recorded for administrator review. Ownership must be verified through the registered contact before a replacement is issued."
       });
     }
     if (action === "member-reset-verify") {
