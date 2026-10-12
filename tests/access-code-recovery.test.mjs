@@ -52,7 +52,7 @@ test("recovery flow uses expiring, hashed challenges and private database storag
   assert.match(api, /expires_at/);
   assert.match(api, /rto_complete_sms_access_recovery/);
   assert.match(api, /replacement access code has been sent to your registered phone/);
-  assert.match(migration, /enable row level security/i);
+  assert.match(migration, /enable row level security/i);\n  assert.match(migration, /pg_advisory_xact_lock/i);\n  assert.match(migration, /attempts \\+ 1/i);
   assert.match(migration, /revoke all on table public\.access_code_recovery_challenges from public, anon, authenticated/i);
   assert.match(app, /verifyMemberAccessReset/);
   assert.doesNotMatch(api, /return json\(\{ ok: true, code: replacementCode \}\)/);
