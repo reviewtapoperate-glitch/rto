@@ -9,7 +9,9 @@ const env = {
   SUPABASE_URL: "https://rto-test.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
   RTO_SESSION_SECRET: "test-session-secret-at-least-thirty-two-characters",
-  RTO_CREDENTIAL_PEPPER: "test-credential-pepper-at-least-thirty-two-characters"
+  RTO_CREDENTIAL_PEPPER: "test-credential-pepper-at-least-thirty-two-characters",
+  AT_USERNAME: "test-user",
+  AT_API_KEY: "test-api-key"
 };
 globalThis.Netlify = { env: { get: name => env[name] } };
 const { handleRtoApi } = await import("../netlify/functions/rto-api.mjs");
@@ -42,47 +44,64 @@ async function sessionCookie(role, extra = {}) {
   return "rto_session=" + body + "." + signature;
 }
 
-test("reset request matches Kenyan phone formats without exposing account existence", async () => {
+test("reset request sends an OTP by SMS to a uniquely matching registered phone", async () => {
   const oldFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     const parsed = new URL(String(url));
-    calls.push({ url: parsed, method: init.method || "GET", body: init.body ? JSON.parse(init.body) : null });
+    let body = null;
+    if (init.body && String(init.headers?.["Content-Type"] || init.headers?.["content-type"] || "").includes("application/json")) {
+      body = JSON.parse(init.body);
+    }
+    calls.push({ url: parsed, method: init.method || "GET", body, rawBody: init.body });
     if (parsed.pathname.endsWith("/members")) {
       return jsonResponse([{ id: "member-1", name: "Jane Doe", phone: "+254712345678" }]);
     }
-    if (parsed.pathname.endsWith("/access_code_reset_requests")) {
-      return jsonResponse([{ id: 42, status: "pending" }], 201);
+    if (parsed.pathname.endsWith("/rpc/rto_create_sms_recovery_challenge")) {
+      assert.equal(body.p_member_id, "member-1");
+      assert.equal(body.p_phone, "254712345678");
+      assert.match(body.p_otp_hash, /^hmac-sha256:/);
+      return jsonResponse(true);
     }
-    throw new Error("Unexpected mocked request: " + parsed.pathname);
+    if (parsed.hostname === "api.africastalking.com") {
+      assert.match(String(init.body), /Your\+ReviewTapOperate\+verification\+code/);
+      return jsonResponse({ SMSMessageData: { Recipients: [{ statusCode: 102 }] } });
+    }
+    throw new Error("Unexpected mocked request: " + parsed.href);
   };
   try {
     const response = await handleRtoApi(request("member-reset-request", {
-      name: "Jane Doe", phone: "0712 345 678"
+      phone: "0712 345 678"
     }), { deploy: { context: "production" } });
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).ok, true);
-    const insert = calls.find(c => c.url.pathname.endsWith("/access_code_reset_requests"));
-    assert.ok(insert, "matching request should be stored");
-    assert.equal(insert.body.member_id, "member-1");
-    assert.equal(insert.body.phone, "+254712345678");
+    const result = await response.json();
+    assert.equal(result.ok, true);
+    assert.match(result.challengeId, /^[0-9a-f-]{36}$/i);
+    assert.ok(calls.some(c => c.url.pathname.endsWith("/rpc/rto_create_sms_recovery_challenge")));
+    assert.ok(calls.some(c => c.url.hostname === "api.africastalking.com"));
+    assert.equal(calls.some(c => c.url.pathname.endsWith("/access_code_reset_requests")), false);
   } finally { globalThis.fetch = oldFetch; }
 });
 
-test("reset request keeps a generic response when details do not match", async () => {
+test("unknown phone receives the same generic response without an SMS or stored challenge", async () => {
   const oldFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     const parsed = new URL(String(url));
     calls.push({ url: parsed, method: init.method || "GET" });
-    return jsonResponse([{ id: "member-1", name: "Jane Doe", phone: "+254712345678" }]);
+    if (parsed.pathname.endsWith("/members")) {
+      return jsonResponse([{ id: "member-1", name: "Jane Doe", phone: "+254712345678" }]);
+    }
+    throw new Error("Unknown numbers must not trigger writes or SMS: " + parsed.href);
   };
   try {
     const response = await handleRtoApi(request("member-reset-request", {
-      name: "Wrong Name", phone: "0712345678"
+      phone: "0700 000 000"
     }), { deploy: { context: "production" } });
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).ok, true);
+    const result = await response.json();
+    assert.equal(result.ok, true);
+    assert.match(result.message, /If this number is registered/);
     assert.equal(calls.some(c => c.method === "POST"), false);
   } finally { globalThis.fetch = oldFetch; }
 });
