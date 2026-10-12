@@ -9,7 +9,7 @@ export async function sendRecoverySms({ phone, message, envGet = recoveryEnv, fe
   const apiKey = envGet("AT_API_KEY");
   const senderId = envGet("AT_SENDER_ID");
   if (!username || !apiKey) return { ok: false, reason: "not_configured" };
-  if (!/^\\+254\\d{9}$/.test(String(phone)) || !message || String(message).length > 480) {
+  if (!/^\+254\d{9}$/.test(String(phone)) || !message || String(message).length > 480) {
     return { ok: false, reason: "invalid_message" };
   }
   const form = new URLSearchParams({ username, to: phone, message: String(message) });
