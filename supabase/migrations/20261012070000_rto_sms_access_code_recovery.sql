@@ -39,7 +39,7 @@ begin
   if p_phone is null or p_phone !~ '^254[0-9]{9}$'
      or p_otp_hash is null or p_otp_hash !~ '^hmac-sha256:[A-Za-z0-9_-]{43}$'
      or p_expires_at <= now() or p_expires_at > now() + interval '11 minutes'
-     or not exists (select 1 from public.members where id = p_member_id and regexp_replace(phone, '\\D', '', 'g') <> '') then
+     or not exists (select 1 from public.members where id = p_member_id) then
     return false;
   end if;
   perform pg_advisory_xact_lock(hashtext(p_phone));
