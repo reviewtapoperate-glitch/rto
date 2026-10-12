@@ -110,6 +110,9 @@ test("administrator reset updates the member and resolves the request through on
   globalThis.fetch = async (url, init = {}) => {
     const parsed = new URL(String(url));
     calls.push({ url: parsed, method: init.method || "GET", body: init.body ? JSON.parse(init.body) : null });
+    if (parsed.pathname.endsWith("/access_code_reset_requests") && (init.method || "GET") === "GET") {
+      return jsonResponse([{ id: 42, member_id: "member-1", status: "pending" }]);
+    }
     assert.ok(parsed.pathname.endsWith("/rpc/rto_resolve_access_code_reset"));
     return jsonResponse(true);
   };
@@ -118,16 +121,23 @@ test("administrator reset updates the member and resolves the request through on
     assert.equal(response.status, 200);
     const result = await response.json();
     assert.ok(result.code, "replacement code is returned only after the atomic RPC succeeds");
-    assert.equal(calls.length, 1, "credential and request state are changed by one database transaction");
-    assert.deepEqual(calls[0].body, { p_request_id: 42, p_code_hash: calls[0].body.p_code_hash });
-    assert.match(calls[0].body.p_code_hash, /^hmac-sha256:[A-Za-z0-9_-]{43}$/);
+    const rpcCalls = calls.filter(call => call.url.pathname.endsWith("/rpc/rto_resolve_access_code_reset"));
+    assert.equal(rpcCalls.length, 1, "credential and request state are changed by one database transaction");
+    assert.deepEqual(rpcCalls[0].body, { p_request_id: 42, p_code_hash: rpcCalls[0].body.p_code_hash });
+    assert.match(rpcCalls[0].body.p_code_hash, /^hmac-sha256:[A-Za-z0-9_-]{43}$/);
   } finally { globalThis.fetch = oldFetch; }
 });
 
 test("administrator reset does not disclose a code when the atomic RPC declines the request", async () => {
   const oldFetch = globalThis.fetch;
   const cookie = await sessionCookie("admin");
-  globalThis.fetch = async () => jsonResponse(false);
+  globalThis.fetch = async (url, init = {}) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/access_code_reset_requests") && (init.method || "GET") === "GET") {
+      return jsonResponse([{ id: 42, member_id: "member-1", status: "pending" }]);
+    }
+    return jsonResponse(false);
+  };
   try {
     const response = await handleRtoApi(request("admin-member-reset", { requestId: "42" }, cookie), { deploy: { context: "production" } });
     assert.equal(response.status, 409);
