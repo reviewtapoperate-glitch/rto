@@ -242,13 +242,13 @@ export async function handleRtoApi(request, context) {
       if (!isRecoverySmsConfigured()) return json({ error: "SMS recovery is not configured yet. Please contact support." }, 503);
       const challengeId = crypto.randomUUID();
       const submittedPhone = canonicalPhoneForMatch(phone);
-      const submittedDigits = phone.replace(/\\D/g, "");
+      const submittedDigits = phone.replace(/\D/g, "");
       const candidates = [...new Set([
         submittedDigits,
         submittedPhone,
         submittedPhone ? "+" + submittedPhone : "",
         submittedPhone.startsWith("254") ? "0" + submittedPhone.slice(3) : ""
-      ].filter(value => /^\\+?\\d{7,15}$/.test(value)))];
+      ].filter(value => /^\+?\d{7,15}$/.test(value)))];
       const phoneFilter = candidates.map(value => "phone.eq." + encodeURIComponent(value)).join(",");
       const rows = candidates.length
         ? await supabaseRequest("members?select=id,name,phone&or=(" + phoneFilter + ")&limit=100")
@@ -293,7 +293,7 @@ export async function handleRtoApi(request, context) {
     if (action === "member-reset-verify") {
       const challengeId = String(body?.challengeId || "");
       const otp = String(body?.code || "").trim();
-      if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^\\d{6}$/.test(otp)) {
+      if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^\d{6}$/.test(otp)) {
         return json({ error: "That verification code is invalid or expired. Request a new code and try again." }, 400);
       }
       const submittedHash = await hashCredential("sms-recovery:" + challengeId + ":" + otp);
