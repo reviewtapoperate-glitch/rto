@@ -53,7 +53,8 @@ assert.match(api, /action === "upload-image"/, "image uploads must pass through 
 assert.match(api, /action === "delete-image"/, "image deletion must be authorized server-side");
 assert.match(auth, /windowLimit: 15/, "authentication endpoint must have a stricter IP rate limit");
 assert.match(js, /submitBooking/, "booking flow must remain present");
-assert.match(js, /submitReview/, "review flow must remain present");
+assert.doesNotMatch(js, /id="reviewsSection"|function loadReviewsSection|function submitReview/, "in-app review UI must remain removed");
+assert.match(js, /Leave a Google review/, "Google Review links must remain available");
 assert.match(js, /subscribeToLiveUpdates/, "Realtime subscription code must remain present");
 assert.match(js, /IS_NETLIFY_PREVIEW/, "preview deployment must be detected");
 assert.match(js, /Member sign-up is disabled in the verification preview/, "preview must block member writes");

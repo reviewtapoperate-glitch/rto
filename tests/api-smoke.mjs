@@ -65,6 +65,19 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === "/rest/v1/bookings" && method === "DELETE") return Response.json([]);
   if (url.pathname === "/rest/v1/page_events" && method === "POST") { const row = { id: events.length + 1, ...body }; events.push(row); return Response.json([row], { status: 201 }); }
   if (url.pathname === "/rest/v1/page_events" && method === "GET") return Response.json(events);
+  if (url.pathname === "/rest/v1/rpc/rto_resolve_access_code_reset" && method === "POST") {
+    assert.ok(body.p_request_id > 0, "atomic reset RPC receives the request id");
+    assert.match(body.p_code_hash, /^hmac-sha256:/, "atomic reset RPC receives only the hashed replacement code");
+    const reset = resetRequests.find(row => String(row.id) === String(body.p_request_id) && row.status === "pending");
+    if (!reset) return Response.json(false);
+    const member = members.find(row => row.id === reset.member_id);
+    if (!member) return Response.json(false);
+    member.access_code = null;
+    member.access_code_hash = body.p_code_hash;
+    reset.status = "resolved";
+    reset.resolved_at = new Date().toISOString();
+    return Response.json(true);
+  }
   if (url.pathname === "/rest/v1/rpc/rto_system_analytics" && method === "POST") return Response.json({
     businesses: 1, listedBusinesses: 1, members: members.length, bookings: bookings.length,
     pendingBookings: bookings.filter(row => row.status === "pending").length, eventCount: events.length,
@@ -101,6 +114,12 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname === "/rest/v1/members" && method === "GET") {
     const phone = url.searchParams.get("phone")?.replace("eq.", "");
     const id = url.searchParams.get("id")?.replace("eq.", "");
+    const orFilter = url.searchParams.get("or");
+    if (orFilter) {
+      // The production reset flow queries multiple accepted phone formats via PostgREST's OR filter.
+      const candidates = [...orFilter.matchAll(/phone\.eq\.([^,()]+)/g)].map(match => decodeURIComponent(match[1]));
+      return Response.json(members.filter(member => candidates.includes(member.phone)));
+    }
     const row = members.find(m => (phone && m.phone === phone) || (id && m.id === id));
     return Response.json(row ? [row] : []);
   }

@@ -275,10 +275,15 @@ export async function handleRtoApi(request, context) {
       if (!resetRequest || resetRequest.status !== "pending" || !resetRequest.member_id) return json({ error: "This request cannot be completed. Verify the account details first." }, 404);
       const code = randomAccessCode();
       const codeHash = await hashCredential(code);
-      const updatedMember = await supabaseRequest("members?id=eq." + encodeURIComponent(resetRequest.member_id), "PATCH", { access_code: null, access_code_hash: codeHash });
-      if (!Array.isArray(updatedMember) || !updatedMember.length) return json({ error: "The member account could not be updated. The request remains pending." }, 409);
-      const updatedRequest = await supabaseRequest("access_code_reset_requests?id=eq." + encodeURIComponent(requestId) + "&status=eq.pending", "PATCH", { status: "resolved", resolved_at: new Date().toISOString() });
-      if (!Array.isArray(updatedRequest) || !updatedRequest.length) return json({ error: "The code was updated, but the request status could not be confirmed. Refresh the request list before retrying." }, 409);
+      // One database transaction changes the member credential and resolves
+      // the pending request together. Never return a code unless both commit.
+      const resolved = await supabaseRequest("rpc/rto_resolve_access_code_reset", "POST", {
+        p_request_id: Number(requestId),
+        p_code_hash: codeHash
+      });
+      if (!(resolved === true || (Array.isArray(resolved) && resolved[0] === true))) {
+        return json({ error: "This request is no longer pending or the member account could not be updated. Refresh the request list before retrying." }, 409);
+      }
       return json({ ok: true, code });
     }
     if (action === "admin-member-reset-reject") {

@@ -24,6 +24,8 @@ migrations=(
   supabase/migrations/202610100006_rto_storage_limits.sql
   supabase/migrations/202610100007_repair_bigint_id_generation.sql
   supabase/migrations/202610110001_business_analytics_and_access_recovery.sql
+  supabase/migrations/202610120001_rto_analytics_safe_delete.sql
+  supabase/migrations/202610120002_atomic_access_code_reset.sql
 )
 
 for migration in "${migrations[@]}"; do
@@ -61,6 +63,9 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='members' AND column_name='access_code_hash') THEN
     RAISE EXCEPTION 'members.access_code_hash missing after baseline chain';
+  END IF;
+  IF to_regprocedure('public.rto_resolve_access_code_reset(bigint,text)') IS NULL THEN
+    RAISE EXCEPTION 'Atomic access-code reset RPC missing after baseline chain';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
