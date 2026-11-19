@@ -558,8 +558,8 @@ function logEvent(slugValue, type, label){
     rtoApi("event-log", {
       slug: slugValue, eventType: type, label: label || null,
       source: getTrafficSource(), referrer: document.referrer || ""
-    }).catch(() => {});
-  } catch(e) { /* best-effort, never blocks the visitor */ }
+    }).catch(error => console.warn("RTO analytics event failed to record:", error));
+  } catch(e) { console.warn("RTO analytics event failed to record:", e); }
 }
 function renderAnalyticsModal(slugValue, name){
   const old = document.getElementById("analyticsModal");
@@ -1872,6 +1872,7 @@ function showQr(slugValue, name){
         <div class="hint" style="margin-bottom:6px;">e.g. a QR on tables that opens straight to the Menu, or one on receipts that jumps to Reviews.</div>
         <div id="qrcanvas-holder"></div>
         <button class="btn" id="dlBtn">Download QR</button>
+        <button class="btn secondary" style="margin-top:8px;" id="copyQrLinkBtn">Copy destination link</button>
         <p class="hint" id="qrLinkText" style="margin-top:12px;word-break:break-all;color:var(--cyan);"></p>
         <button class="btn secondary" style="margin-top:12px;" onclick="closeQr()">Close</button>
       </div>
@@ -1887,17 +1888,28 @@ function drawQrCanvas(slugValue, name){
   const holder = document.getElementById("qrcanvas-holder");
   holder.innerHTML = "";
   document.getElementById("qrLinkText").textContent = link;
+  const copyButton = document.getElementById("copyQrLinkBtn");
+  if (copyButton) copyButton.onclick = async () => {
+    try { await navigator.clipboard.writeText(link); toast("QR destination copied"); }
+    catch { toast("Couldn't copy the destination link."); }
+  };
   new QRCode(holder, { text: link, width: 240, height: 240, colorDark:"#0A0A10", colorLight:"#ffffff" });
-  setTimeout(() => {
+  const downloadButton = document.getElementById("dlBtn");
+  if (downloadButton) downloadButton.onclick = () => {
     const canvas = holder.querySelector("canvas");
-    document.getElementById("dlBtn").onclick = () => {
-      const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
-      const section2 = document.getElementById("qrSectionPicker").value;
-      a.download = `${slugValue}${section2 ? "-" + section2 : ""}-qr.png`;
-      a.click();
-    };
-  }, 150);
+    const image = holder.querySelector("img");
+    let imageUrl = "";
+    try {
+      if (canvas) imageUrl = canvas.toDataURL("image/png");
+      else if (image && image.src) imageUrl = image.src;
+    } catch {}
+    if (!imageUrl) { toast("QR image is not ready yet. Please try again."); return; }
+    const section2 = document.getElementById("qrSectionPicker").value;
+    const a = document.createElement("a");
+    a.href = imageUrl;
+    a.download = `${slugValue}${section2 ? "-" + section2 : ""}-qr.png`;
+    a.click();
+  };
 }
 function closeQr(){ const m = document.getElementById("qrModal"); if (m) m.remove(); }
 
