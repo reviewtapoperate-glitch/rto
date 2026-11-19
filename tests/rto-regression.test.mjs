@@ -232,6 +232,20 @@ test("public app removes in-app review UI but retains Google Review and three de
   assert.match(app, /<details style="margin:12px 0;"><summary[^>]*>Advanced channel tracking/);
 });
 
+test("QR modal supports copying its destination and downloads canvas or image output", async () => {
+  const app = await readFile(new URL("../frontend/js/app.js", import.meta.url), "utf8");
+  assert.match(app, /id="copyQrLinkBtn"/);
+  assert.match(app, /QR destination copied/);
+  assert.match(app, /holder\.querySelector\("canvas"\)/);
+  assert.match(app, /holder\.querySelector\("img"\)/);
+  assert.match(app, /QR image is not ready yet/);
+});
+
+test("analytics event logging surfaces recording failures in the console", async () => {
+  const app = await readFile(new URL("../frontend/js/app.js", import.meta.url), "utf8");
+  assert.match(app, /RTO analytics event failed to record/);
+});
+
 test("frontend restores server session and the selected top-level view after refresh", async () => {
   const app = await readFile(new URL("../frontend/js/app.js", import.meta.url), "utf8");
   assert.match(app, /async function restoreServerSession\(\)/);
