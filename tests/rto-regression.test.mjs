@@ -44,30 +44,21 @@ async function sessionCookie(role, extra = {}) {
   return "rto_session=" + body + "." + signature;
 }
 
-test("reset request sends an OTP by SMS to a uniquely matching registered phone", async () => {
+test("reset request records an administrator-review request and never invokes SMS", async () => {
   const oldFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     const parsed = new URL(String(url));
-    let body = null;
-    if (init.body && String(init.headers?.["Content-Type"] || init.headers?.["content-type"] || "").includes("application/json")) {
-      body = JSON.parse(init.body);
-    }
-    calls.push({ url: parsed, method: init.method || "GET", body, rawBody: init.body });
+    calls.push({ url: parsed, method: init.method || "GET", body: init.body ? JSON.parse(init.body) : null });
     if (parsed.pathname.endsWith("/members")) {
       return jsonResponse([{ id: "member-1", name: "Jane Doe", phone: "+254712345678" }]);
     }
-    if (parsed.pathname.endsWith("/rpc/rto_create_sms_recovery_challenge")) {
-      assert.equal(body.p_member_id, "member-1");
-      assert.equal(body.p_phone, "254712345678");
-      assert.match(body.p_otp_hash, /^hmac-sha256:/);
-      return jsonResponse(true);
+    if (parsed.pathname.endsWith("/access_code_reset_requests")) {
+      assert.equal((init.method || "GET"), "POST");
+      assert.equal(calls.at(-1).body.status, "pending");
+      return jsonResponse([{ id: 1, status: "pending" }]);
     }
-    if (parsed.hostname === "api.africastalking.com") {
-      assert.match(String(init.body), /Your\+ReviewTapOperate\+verification\+code/);
-      return jsonResponse({ SMSMessageData: { Recipients: [{ statusCode: 102 }] } });
-    }
-    throw new Error("Unexpected mocked request: " + parsed.href);
+    throw new Error("Unexpected request: " + parsed.href);
   };
   try {
     const response = await handleRtoApi(request("member-reset-request", {
@@ -76,10 +67,11 @@ test("reset request sends an OTP by SMS to a uniquely matching registered phone"
     assert.equal(response.status, 200);
     const result = await response.json();
     assert.equal(result.ok, true);
-    assert.match(result.challengeId, /^[0-9a-f-]{36}$/i);
-    assert.ok(calls.some(c => c.url.pathname.endsWith("/rpc/rto_create_sms_recovery_challenge")));
-    assert.ok(calls.some(c => c.url.hostname === "api.africastalking.com"));
-    assert.equal(calls.some(c => c.url.pathname.endsWith("/access_code_reset_requests")), false);
+    assert.equal(result.mode, "manual");
+    assert.match(result.message, /administrator review/i);
+    assert.ok(calls.some(c => c.url.pathname.endsWith("/access_code_reset_requests")));
+    assert.equal(calls.some(c => c.url.hostname === "api.africastalking.com"), false);
+    assert.equal(calls.some(c => c.url.pathname.includes("recovery_challenges")), false);
   } finally { globalThis.fetch = oldFetch; }
 });
 
