@@ -135,9 +135,9 @@ function renderMemberAuthTab(tab){
   if (tab === "forgot") {
     body.innerHTML = `
       <p style="font-weight:700;margin:0 0 4px;">Forgot access code?</p>
-      <p class="hint" style="margin-bottom:14px;">Enter the phone number registered to your account. We'll send a verification code by SMS if the number matches an account.</p>
+      <p class="hint" style="margin-bottom:14px;">Submit your registered phone number. An administrator will verify your account ownership before processing a replacement access code. Recovery is not automatic.</p>
       <div class="field" style="text-align:left;"><label>Registered phone number</label><input id="ma_reset_phone" autocomplete="tel" inputmode="tel"></div>
-      <button class="btn" onclick="requestMemberAccessReset()">Send verification code</button>
+      <button class="btn" onclick="requestMemberAccessReset()">Submit reset request</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Back to login</button>
       <button class="btn secondary" style="margin-top:8px;" onclick="closeMemberAuthModal()">Cancel</button>`;
   } else if (tab === "login") {
@@ -201,26 +201,10 @@ async function requestMemberAccessReset(){
   try {
     const result = await rtoApi("member-reset-request", { phone });
     const body = document.getElementById("memberAuthBody");
-    if (result.mode === "manual") {
-      if (body) body.innerHTML = `<p style="font-weight:700;">Reset request received</p><p class="hint">${esc(result.message || "If this number is registered, support will verify ownership before issuing a replacement code.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
-      return;
-    }
-    window.__rtoRecoveryChallengeId = result.challengeId;
-    if (body) body.innerHTML = `<p style="font-weight:700;margin:0 0 4px;">Verify your phone</p><p class="hint" style="margin-bottom:14px;">${esc(result.message || "If this number is registered, a verification code will be sent by SMS.")}</p><div class="field" style="text-align:left;"><label>6-digit SMS verification code</label><input id="ma_reset_otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div><button class="btn" onclick="verifyMemberAccessReset()">Verify and send replacement code</button><button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('forgot')">Try another number</button><button class="btn secondary" style="margin-top:8px;" onclick="renderMemberAuthTab('login')">Back to login</button>`;
-  } catch (error) { toast(error.message || "Couldn't start access-code recovery."); }
+    if (body) body.innerHTML = `<p style="font-weight:700;">Reset request submitted</p><p class="hint">${esc(result.message || "If this number is registered, an administrator will review the request and verify ownership before issuing a replacement code.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
+  } catch (error) { toast(error.message || "Couldn't submit access-code recovery request."); }
 }
-async function verifyMemberAccessReset(){
-  if (blockPreviewWrite("Access-code recovery is disabled in the verification preview.")) return;
-  const challengeId = window.__rtoRecoveryChallengeId || "";
-  const code = document.getElementById("ma_reset_otp").value.trim();
-  if (!/^\d{6}$/.test(code)) { toast("Enter the 6-digit code sent by SMS"); return; }
-  try {
-    const result = await rtoApi("member-reset-verify", { challengeId, code });
-    const body = document.getElementById("memberAuthBody");
-    window.__rtoRecoveryChallengeId = null;
-    if (body) body.innerHTML = `<p style="font-weight:700;">Access code reset complete</p><p class="hint">${esc(result.message || "Your replacement access code has been sent to your registered phone.")}</p><button class="btn" onclick="renderMemberAuthTab('login')">Back to login</button>`;
-  } catch (error) { toast(error.message || "The code is invalid or expired. Request another code."); }
-}
+
 async function doMemberLogin(){
   if (blockPreviewWrite("Member sign-in is disabled in the verification preview.")) return;
   const phone = document.getElementById("ma_phone").value.trim();
@@ -574,8 +558,8 @@ function logEvent(slugValue, type, label){
     rtoApi("event-log", {
       slug: slugValue, eventType: type, label: label || null,
       source: getTrafficSource(), referrer: document.referrer || ""
-    }).catch(() => {});
-  } catch(e) { /* best-effort, never blocks the visitor */ }
+    }).catch(error => console.warn("RTO analytics event failed to record:", error));
+  } catch(e) { console.warn("RTO analytics event failed to record:", e); }
 }
 function renderAnalyticsModal(slugValue, name){
   const old = document.getElementById("analyticsModal");
@@ -1888,6 +1872,7 @@ function showQr(slugValue, name){
         <div class="hint" style="margin-bottom:6px;">e.g. a QR on tables that opens straight to the Menu, or one on receipts that jumps to Reviews.</div>
         <div id="qrcanvas-holder"></div>
         <button class="btn" id="dlBtn">Download QR</button>
+        <button class="btn secondary" style="margin-top:8px;" id="copyQrLinkBtn">Copy destination link</button>
         <p class="hint" id="qrLinkText" style="margin-top:12px;word-break:break-all;color:var(--cyan);"></p>
         <button class="btn secondary" style="margin-top:12px;" onclick="closeQr()">Close</button>
       </div>
@@ -1903,17 +1888,28 @@ function drawQrCanvas(slugValue, name){
   const holder = document.getElementById("qrcanvas-holder");
   holder.innerHTML = "";
   document.getElementById("qrLinkText").textContent = link;
+  const copyButton = document.getElementById("copyQrLinkBtn");
+  if (copyButton) copyButton.onclick = async () => {
+    try { await navigator.clipboard.writeText(link); toast("QR destination copied"); }
+    catch { toast("Couldn't copy the destination link."); }
+  };
   new QRCode(holder, { text: link, width: 240, height: 240, colorDark:"#0A0A10", colorLight:"#ffffff" });
-  setTimeout(() => {
+  const downloadButton = document.getElementById("dlBtn");
+  if (downloadButton) downloadButton.onclick = () => {
     const canvas = holder.querySelector("canvas");
-    document.getElementById("dlBtn").onclick = () => {
-      const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
-      const section2 = document.getElementById("qrSectionPicker").value;
-      a.download = `${slugValue}${section2 ? "-" + section2 : ""}-qr.png`;
-      a.click();
-    };
-  }, 150);
+    const image = holder.querySelector("img");
+    let imageUrl = "";
+    try {
+      if (canvas) imageUrl = canvas.toDataURL("image/png");
+      else if (image && image.src) imageUrl = image.src;
+    } catch {}
+    if (!imageUrl) { toast("QR image is not ready yet. Please try again."); return; }
+    const section2 = document.getElementById("qrSectionPicker").value;
+    const a = document.createElement("a");
+    a.href = imageUrl;
+    a.download = `${slugValue}${section2 ? "-" + section2 : ""}-qr.png`;
+    a.click();
+  };
 }
 function closeQr(){ const m = document.getElementById("qrModal"); if (m) m.remove(); }
 
@@ -1922,30 +1918,29 @@ async function showOwnerAccessModal(slug){
   if (blockPreviewWrite("Owner-code changes are disabled in the verification preview.")) return;
   const c = __rtoCustomers.find(x => x.slug === slug);
   if (!c) { toast("Couldn't find that business"); return; }
-  try {
-    const result = await rtoApi("admin-owner-code", { slug });
-    renderOwnerAccessModal({ ...c, owner_code: result.code });
-  } catch (error) { toast(error.message || "Couldn't issue a new owner access code."); }
+  renderOwnerAccessModal(c);
 }
 function renderOwnerAccessModal(c){
   const old = document.getElementById("ownerModal");
   if (old) old.remove();
   const link = ownerLink(c.slug);
+  const codePanel = c.owner_code ? `
+    <label style="text-align:left;display:block;margin-top:16px;">New access code</label>
+    <input readonly value="${esc(c.owner_code)}" style="font-family:monospace;font-weight:700;letter-spacing:2px;text-align:center;font-size:18px;" onclick="this.select()">
+    <button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText('${c.owner_code}');toast('Code copied')">Copy code</button>
+  ` : `
+    <p class="hint" style="margin-top:16px;">Access codes are not stored in readable form. Viewing this panel does not change the current code.</p>
+    <button class="btn danger" style="margin-top:8px;" onclick="regenerateOwnerCode('${c.slug}')">Issue a new code (revoke old code)</button>
+  `;
   document.body.insertAdjacentHTML("beforeend", `
     <div class="modal-bg" id="ownerModal" onclick="if(event.target.id==='ownerModal') closeOwnerModal()">
       <div class="modal">
         <p style="font-weight:700;margin:0;">${esc(c.name)}'s private access</p>
-        <p class="hint" style="margin-bottom:16px;">Send them both of these. With this link and code, they can view and edit only their own page — they can never see or reach any other business on the system.</p>
-
+        <p class="hint" style="margin-bottom:16px;">Send the business owner their private login link and access code. They can access only their own business page.</p>
         <label style="text-align:left;display:block;">Their login link</label>
         <input readonly value="${esc(ownerLink(c.slug))}" onclick="this.select()">
         <button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText('${link}');toast('Link copied')">Copy link</button>
-
-        <label style="text-align:left;display:block;margin-top:16px;">Their access code</label>
-        <input readonly value="${esc(c.owner_code)}" style="font-family:monospace;font-weight:700;letter-spacing:2px;text-align:center;font-size:18px;" onclick="this.select()">
-        <button class="btn secondary" style="margin-top:8px;" onclick="navigator.clipboard.writeText('${c.owner_code}');toast('Code copied')">Copy code</button>
-
-        <button class="btn danger" style="margin-top:18px;" onclick="regenerateOwnerCode('${c.slug}')">Regenerate code (revokes the old one)</button>
+        ${codePanel}
         <button class="btn secondary" style="margin-top:10px;" onclick="closeOwnerModal()">Close</button>
       </div>
     </div>`);
