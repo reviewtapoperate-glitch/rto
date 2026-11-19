@@ -2,14 +2,25 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: "0 6 * * 1,4"   # runs every Monday and Thursday at 06:00 UTC
-  workflow_dispatch:          # lets you also trigger it manually from GitHub
+    - cron: "17 6 * * *" # daily at 06:17 UTC
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - name: Ping Supabase to prevent auto-pause
+      - name: Ping Supabase database and fail on HTTP errors
+        env:
+          SUPABASE_URL: https://ptmznpjsgdkasvywufcx.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg' }}
         run: |
-          curl -s "https://ptmznpjsgdkasvywufcx.supabase.co/rest/v1/customers?select=slug&limit=1" \
-          -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bXpucGpzZ2RrYXN2eXd1ZmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDcwODIsImV4cCI6MjEwNDMyMzA4Mn0.eonbgECAHUqIRMHd-UaDRdho3FZbzj2fABFNl75npNg"
+          test -n "$SUPABASE_ANON_KEY"
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 10 --max-time 30 \
+            "$SUPABASE_URL/rest/v1/rpc/rto_keepalive" \
+            -X POST \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}'
